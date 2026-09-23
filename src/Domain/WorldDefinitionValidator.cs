@@ -36,6 +36,11 @@ public static class WorldDefinitionValidator
                 errors.Add($"Quốc gia {country.Id} chưa có tên.");
             }
 
+            if (country.Treasury < 0)
+            {
+                errors.Add($"Ngân khố của {country.Name} không thể âm khi bắt đầu game.");
+            }
+
             if (country.MapColor.Length != 7 || country.MapColor[0] != '#' ||
                 !int.TryParse(country.MapColor.AsSpan(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _))
             {

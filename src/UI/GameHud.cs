@@ -14,7 +14,9 @@ public partial class GameHud : Control
 
     // UI Nodes
     private PanelContainer _topBar = null!;
+    private Label _dateLabel = null!;
     private Label _worldStatsLabel = null!;
+    private Button[] _speedButtons = [];
     private PanelContainer _provincePanel = null!;
     private Label _provinceNameLabel = null!;
     private Label _terrainBadge = null!;
@@ -85,11 +87,23 @@ public partial class GameHud : Control
 
     public void InitializeWorld(Godot.Collections.Dictionary summary)
     {
-        int provinceCount = summary.ContainsKey("provinceCount") ? (int)summary["provinceCount"] : 20;
-        int countryCount = summary.ContainsKey("countryCount") ? (int)summary["countryCount"] : 4;
-
-        _worldStatsLabel.Text = $"🗺️ {provinceCount} Tỉnh Thành   │   👑 {countryCount} Vương Triều   │   ⚔️ Thời Bình";
+        UpdateWorldSummary(summary);
         PopulateLedger();
+    }
+
+    public void OnWorldTicked(Godot.Collections.Dictionary summary)
+    {
+        UpdateWorldSummary(summary);
+
+        if (_selectedProvinceId > 0)
+        {
+            UpdateProvinceDisplay(_selectedProvinceId);
+        }
+
+        if (_ledgerModal.Visible)
+        {
+            PopulateLedger();
+        }
     }
 
     public void OnProvinceSelected(int provinceId)
@@ -249,6 +263,8 @@ public partial class GameHud : Control
             string colorHex = country["mapColor"].AsString();
             int provCount = country["provinceCount"].AsInt32();
             bool isAi = country["isAiControlled"].AsBool();
+            double treasury = country["treasury"].AsDouble();
+            double income = country["income"].AsDouble();
 
             var row = new PanelContainer();
             var rowStyle = CreateStyleBox(new Color("#16202e"), new Color("#2d3d52"), 1, 4, 8, 8);
@@ -283,6 +299,16 @@ public partial class GameHud : Control
             provLabel.AddThemeFontSizeOverride("font_size", 14);
             hBox.AddChild(provLabel);
 
+            var treasuryLabel = new Label
+            {
+                Text = $"💰 {treasury.ToString("N0", CultureInfo.InvariantCulture)} (+{income.ToString("N0", CultureInfo.InvariantCulture)}/ngày)",
+                CustomMinimumSize = new Vector2(170, 0),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            treasuryLabel.AddThemeColorOverride("font_color", new Color("#4ade80"));
+            treasuryLabel.AddThemeFontSizeOverride("font_size", 12);
+            hBox.AddChild(treasuryLabel);
+
             var aiBadge = new Label
             {
                 Text = isAi ? "🤖 AI" : "👑 Người chơi",
@@ -308,6 +334,38 @@ public partial class GameHud : Control
         BuildHoverTooltip();
         BuildLedgerModal();
         BuildNavigationHint();
+    }
+
+    private void UpdateWorldSummary(Godot.Collections.Dictionary summary)
+    {
+        int provinceCount = summary.ContainsKey("provinceCount") ? summary["provinceCount"].AsInt32() : 0;
+        int countryCount = summary.ContainsKey("countryCount") ? summary["countryCount"].AsInt32() : 0;
+        string date = summary.ContainsKey("date") ? summary["date"].AsString() : string.Empty;
+        double treasury = summary.ContainsKey("playerTreasury") ? summary["playerTreasury"].AsDouble() : 0d;
+        double income = summary.ContainsKey("playerIncome") ? summary["playerIncome"].AsDouble() : 0d;
+        int speed = summary.ContainsKey("speed") ? summary["speed"].AsInt32() : 0;
+
+        _dateLabel.Text = string.IsNullOrEmpty(date) ? "Ngày chưa xác định" : $"Ngày {date}";
+        _worldStatsLabel.Text = $"🗺️ {provinceCount} Tỉnh Thành   │   👑 {countryCount} Vương Triều   │   💰 {treasury.ToString("N0", CultureInfo.InvariantCulture)} (+{income.ToString("N0", CultureInfo.InvariantCulture)}/ngày)";
+        UpdateSpeedButtons(speed);
+    }
+
+    private void UpdateSpeedButtons(int speed)
+    {
+        for (var index = 0; index < _speedButtons.Length; index++)
+        {
+            var isActive = index == speed;
+            var button = _speedButtons[index];
+            var normalStyle = CreateStyleBox(
+                bgColor: isActive ? new Color("#253549") : new Color("#151f2c"),
+                borderColor: isActive ? new Color("#ffd166") : new Color("#334155"),
+                borderWidth: 1,
+                radius: 5,
+                padH: 6,
+                padV: 5);
+            button.AddThemeStyleboxOverride("normal", normalStyle);
+            button.AddThemeColorOverride("font_color", isActive ? new Color("#ffd166") : new Color("#f1f5f9"));
+        }
     }
 
     private void BuildTopBar()
@@ -349,10 +407,10 @@ public partial class GameHud : Control
         title.AddThemeFontSizeOverride("font_size", 19);
         titleBox.AddChild(title);
 
-        var subtitle = new Label { Text = "Khởi Nguyên 1444" };
-        subtitle.AddThemeColorOverride("font_color", new Color("#94a3b8"));
-        subtitle.AddThemeFontSizeOverride("font_size", 12);
-        titleBox.AddChild(subtitle);
+        _dateLabel = new Label { Text = "Ngày 01/01/1444" };
+        _dateLabel.AddThemeColorOverride("font_color", new Color("#94a3b8"));
+        _dateLabel.AddThemeFontSizeOverride("font_size", 12);
+        titleBox.AddChild(_dateLabel);
 
         hBox.AddChild(titleBox);
 
@@ -378,12 +436,15 @@ public partial class GameHud : Control
         });
         controlsBox.AddChild(ledgerBtn);
 
-        var speedPauseBtn = CreateStyledButton("⏸️", null, new Vector2(36, 32));
-        var speed1Btn = CreateStyledButton("1x", null, new Vector2(36, 32), isActive: true);
-        var speed2Btn = CreateStyledButton("2x", null, new Vector2(36, 32));
-        controlsBox.AddChild(speedPauseBtn);
-        controlsBox.AddChild(speed1Btn);
-        controlsBox.AddChild(speed2Btn);
+        _speedButtons = new Button[6];
+        for (var speed = 0; speed < _speedButtons.Length; speed++)
+        {
+            var selectedSpeed = speed;
+            var buttonText = speed == 0 ? "⏸" : $"{speed}x";
+            var speedButton = CreateStyledButton(buttonText, () => _session?.SetGameSpeed(selectedSpeed), new Vector2(36, 32));
+            _speedButtons[speed] = speedButton;
+            controlsBox.AddChild(speedButton);
+        }
 
         hBox.AddChild(controlsBox);
 

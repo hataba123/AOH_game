@@ -44,11 +44,13 @@ PROVINCES = [
 ]
 
 COUNTRIES = [
-    {"countryId": 1, "name": "An Lưu", "mapColor": "#C96E55", "isAiControlled": False, "capitalProvinceId": 7},
-    {"countryId": 2, "name": "Dạ Lam", "mapColor": "#5D9C90", "isAiControlled": True, "capitalProvinceId": 9},
-    {"countryId": 3, "name": "Minh Sa", "mapColor": "#7E88B5", "isAiControlled": True, "capitalProvinceId": 16},
-    {"countryId": 4, "name": "Tùng Hải", "mapColor": "#C3A451", "isAiControlled": True, "capitalProvinceId": 18},
+    {"countryId": 1, "name": "An Lưu", "mapColor": "#C96E55", "isAiControlled": False, "capitalProvinceId": 7, "treasury": 8000},
+    {"countryId": 2, "name": "Dạ Lam", "mapColor": "#5D9C90", "isAiControlled": True, "capitalProvinceId": 9, "treasury": 6500},
+    {"countryId": 3, "name": "Minh Sa", "mapColor": "#7E88B5", "isAiControlled": True, "capitalProvinceId": 16, "treasury": 7000},
+    {"countryId": 4, "name": "Tùng Hải", "mapColor": "#C3A451", "isAiControlled": True, "capitalProvinceId": 18, "treasury": 5500},
 ]
+
+GAME_SETTINGS = {"startDate": "1444-01-01", "startingSpeed": 1}
 
 
 def clip_half_plane(polygon, nx, ny, limit):
@@ -165,6 +167,7 @@ def main():
 
     write_json(data_dir / "countries.json", COUNTRIES)
     write_json(data_dir / "provinces.json", province_rows)
+    write_json(data_dir / "game_settings.json", GAME_SETTINGS)
     write_json(data_dir / "province_connections.json", {
         str(province_id): sorted(neighbors) for province_id, neighbors in connections.items()
     })

@@ -10,12 +10,15 @@ Prototype game grand strategy 2D bằng Godot 4 .NET và C#. Bản đồ, tỉnh
 
 Thao tác trên bản đồ: nhấp trái để chọn tỉnh, lăn chuột để phóng to/thu nhỏ, giữ chuột phải hoặc chuột giữa để kéo bản đồ, dùng WASD hoặc phím mũi tên để dịch chuyển.
 
+Mốc mô phỏng hiện có ngày bắt đầu 01/01/1444, nút tạm dừng và tốc độ 1–5 ngày mỗi giây. Thuế tỉnh được cộng vào ngân khố quốc gia mỗi ngày; dân số tăng theo mức 0,6% mỗi năm và nhân lực được cập nhật theo dân số.
+
 ## Cấu trúc
 
 - `src/Domain`: province, country, graph và kiểm tra dữ liệu, không phụ thuộc node Godot.
 - `src/Map`: bản đồ mã màu, hiển thị tỉnh, camera và picking.
 - `src/Infrastructure/Persistence`: nạp JSON và PNG.
 - `src/Presentation`: bootstrap scene và API đọc dữ liệu cho HUD.
+- `src/Core` và `src/Simulation`: thời gian game, tốc độ, kinh tế và dân số.
 - `Data`: dữ liệu giả tưởng cho 20 tỉnh, 4 quốc gia và đồ thị kết nối.
 - `assets/maps/province_id_map.png`: màu RGB mã hóa province ID; biển dùng màu `#152F37`.
 
@@ -34,7 +37,7 @@ HUD sẽ được nạp tự động từ `Scenes/UI/GameHud.tscn`. Xem [hợp �
 ## Lộ trình
 
 1. Phase 1 — Bản đồ, province/country, graph, picking, hover, đọc JSON và kiểm tra dữ liệu.
-2. Phase 2 — Ngày trong game, tốc độ, kinh tế và tăng trưởng dân số.
+2. Phase 2 — Ngày trong game, tốc độ, kinh tế và tăng trưởng dân số (đã triển khai).
 3. Phase 3 — Quân đội, tuyển quân, tìm đường và di chuyển.
 4. Phase 4 — Chiến tranh, giao tranh, chiếm đóng và hòa ước.
 5. Phase 5 — AI kinh tế và quân sự.

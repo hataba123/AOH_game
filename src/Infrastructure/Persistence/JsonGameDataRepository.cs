@@ -1,8 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Globalization;
 using AOH.Game.Domain;
 using AOH.Game.Domain.Countries;
 using AOH.Game.Domain.Provinces;
+using AOH.Game.Core;
 using AOH.Game.Map;
 using Godot;
 using GodotFileAccess = Godot.FileAccess;
@@ -14,6 +16,7 @@ public sealed class JsonGameDataRepository
     private const string CountriesPath = "res://Data/countries.json";
     private const string ProvincesPath = "res://Data/provinces.json";
     private const string ConnectionsPath = "res://Data/province_connections.json";
+    private const string SettingsPath = "res://Data/game_settings.json";
     private const string ProvinceIdMapPath = "res://assets/maps/province_id_map.png";
 
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
@@ -23,6 +26,17 @@ public sealed class JsonGameDataRepository
         var countryData = ReadJson<List<CountryData>>(CountriesPath);
         var provinceData = ReadJson<List<ProvinceData>>(ProvincesPath);
         var connectionData = ReadJson<Dictionary<int, int[]>>(ConnectionsPath);
+        var settingsData = ReadJson<GameSettingsData>(SettingsPath);
+        if (!DateOnly.TryParseExact(settingsData.StartDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var startDate))
+        {
+            throw new InvalidDataException($"Ngày bắt đầu game không hợp lệ: {settingsData.StartDate}.");
+        }
+
+        if (settingsData.StartingSpeed is < 1 or > 5)
+        {
+            throw new InvalidDataException("Tốc độ bắt đầu phải nằm trong khoảng 1 đến 5.");
+        }
+
         var countries = countryData.Select(ToCountry).ToArray();
         var provinces = provinceData.Select(ToProvince).ToArray();
         var graph = CreateProvinceGraph(connectionData);
@@ -37,7 +51,7 @@ public sealed class JsonGameDataRepository
             throw new InvalidDataException("Dữ liệu thế giới không hợp lệ:\n- " + string.Join("\n- ", errors));
         }
 
-        return new GameDataLoadResult(new GameWorld(countries, provinces, graph), colorLookup, mapData);
+        return new GameDataLoadResult(new GameWorld(countries, provinces, graph), colorLookup, mapData, startDate, (GameSpeed)settingsData.StartingSpeed);
     }
 
     private static JsonSerializerOptions CreateJsonOptions()
@@ -76,7 +90,8 @@ public sealed class JsonGameDataRepository
             data.Name,
             data.MapColor,
             data.IsAiControlled,
-            data.CapitalProvinceId);
+            data.CapitalProvinceId,
+            data.Treasury);
     }
 
     private static Province ToProvince(ProvinceData data)
@@ -153,6 +168,15 @@ public sealed class JsonGameDataRepository
         public bool IsAiControlled { get; init; }
 
         public int CapitalProvinceId { get; init; }
+
+        public double Treasury { get; init; }
+    }
+
+    private sealed class GameSettingsData
+    {
+        public string StartDate { get; init; } = string.Empty;
+
+        public int StartingSpeed { get; init; } = 1;
     }
 
     private sealed class ProvinceData
@@ -189,11 +213,18 @@ public sealed class JsonGameDataRepository
 
 public sealed class GameDataLoadResult
 {
-    public GameDataLoadResult(GameWorld world, ProvinceColorLookup colorLookup, ProvinceMapData mapData)
+    public GameDataLoadResult(
+        GameWorld world,
+        ProvinceColorLookup colorLookup,
+        ProvinceMapData mapData,
+        DateOnly startDate,
+        GameSpeed startingSpeed)
     {
         World = world;
         ColorLookup = colorLookup;
         MapData = mapData;
+        StartDate = startDate;
+        StartingSpeed = startingSpeed;
     }
 
     public GameWorld World { get; }
@@ -201,4 +232,8 @@ public sealed class GameDataLoadResult
     public ProvinceColorLookup ColorLookup { get; }
 
     public ProvinceMapData MapData { get; }
+
+    public DateOnly StartDate { get; }
+
+    public GameSpeed StartingSpeed { get; }
 }

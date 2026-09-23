@@ -3,6 +3,10 @@ using AOH.Game.Domain.Countries;
 using AOH.Game.Domain.Provinces;
 using AOH.Game.Infrastructure.Persistence;
 using AOH.Game.Map;
+using AOH.Game.Core;
+using AOH.Game.Simulation;
+using AOH.Game.Simulation.Economy;
+using AOH.Game.Simulation.Population;
 using Godot;
 
 namespace AOH.Game.Presentation;
@@ -14,6 +18,7 @@ public partial class GameBootstrap : Node2D
     private GameWorld? _world;
     private ProvinceMap? _provinceMap;
     private Node? _hud;
+    private SimulationEngine? _simulationEngine;
 
     [Signal]
     public delegate void WorldReadyEventHandler(Godot.Collections.Dictionary summary);
@@ -24,12 +29,20 @@ public partial class GameBootstrap : Node2D
     [Signal]
     public delegate void ProvinceHoveredEventHandler(int provinceId);
 
+    [Signal]
+    public delegate void WorldTickedEventHandler(Godot.Collections.Dictionary summary);
+
     public override void _Ready()
     {
         try
         {
             var data = new JsonGameDataRepository().Load();
             _world = data.World;
+            _simulationEngine = new SimulationEngine(
+                _world,
+                new GameTime(data.StartDate, data.StartingSpeed),
+                new EconomySystem(),
+                new PopulationSystem());
             _provinceMap = new ProvinceMap();
             _provinceMap.Configure(data.World, data.ColorLookup, data.MapData);
             _provinceMap.ProvinceSelectionChanged += HandleProvinceSelected;
@@ -44,6 +57,25 @@ public partial class GameBootstrap : Node2D
         {
             GD.PushError($"Không thể khởi tạo game: {exception.Message}");
         }
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_simulationEngine?.AdvanceFrame(delta) > 0)
+        {
+            EmitSignal(SignalName.WorldTicked, CreateWorldSummary());
+        }
+    }
+
+    public void SetGameSpeed(int speed)
+    {
+        if (_simulationEngine is null || !Enum.IsDefined((GameSpeed)speed))
+        {
+            return;
+        }
+
+        _simulationEngine.Time.SetSpeed((GameSpeed)speed);
+        EmitSignal(SignalName.WorldTicked, CreateWorldSummary());
     }
 
     public Godot.Collections.Dictionary GetProvinceDetails(int provinceId)
@@ -91,7 +123,12 @@ public partial class GameBootstrap : Node2D
                 ["mapColor"] = country.MapColor,
                 ["capitalProvinceId"] = country.CapitalProvinceId,
                 ["provinceCount"] = _world.Provinces.Values.Count(province => province.OwnerCountryId == country.Id),
-                ["isAiControlled"] = country.IsAiControlled
+                ["isAiControlled"] = country.IsAiControlled,
+                ["treasury"] = country.Treasury,
+                ["income"] = country.Income,
+                ["expenses"] = country.Expenses,
+                ["population"] = country.Population,
+                ["manpower"] = country.Manpower
             });
         }
 
@@ -165,6 +202,11 @@ public partial class GameBootstrap : Node2D
         {
             Connect(SignalName.ProvinceHovered, new Callable(_hud, "OnProvinceHovered"));
         }
+
+        if (_hud.HasMethod("OnWorldTicked"))
+        {
+            Connect(SignalName.WorldTicked, new Callable(_hud, "OnWorldTicked"));
+        }
     }
 
     private Godot.Collections.Dictionary CreateWorldSummary()
@@ -172,7 +214,12 @@ public partial class GameBootstrap : Node2D
         return new Godot.Collections.Dictionary
         {
             ["provinceCount"] = _world?.Provinces.Count ?? 0,
-            ["countryCount"] = _world?.Countries.Count ?? 0
+            ["countryCount"] = _world?.Countries.Count ?? 0,
+            ["date"] = _simulationEngine?.Time.CurrentDate.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+            ["speed"] = _simulationEngine is null ? 0 : (int)_simulationEngine.Time.Speed,
+            ["tickCount"] = _simulationEngine?.Time.TickCount ?? 0,
+            ["playerTreasury"] = _world?.Countries.Values.FirstOrDefault(country => !country.IsAiControlled)?.Treasury ?? 0d,
+            ["playerIncome"] = _world?.Countries.Values.FirstOrDefault(country => !country.IsAiControlled)?.Income ?? 0d
         };
     }
 

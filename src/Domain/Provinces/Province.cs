@@ -42,7 +42,7 @@ public sealed class Province
 
     public CountryId ControllerCountryId { get; }
 
-    public int Population { get; }
+    public int Population { get; private set; }
 
     public double Economy { get; }
 
@@ -50,7 +50,7 @@ public sealed class Province
 
     public double TaxRate { get; }
 
-    public int Manpower { get; }
+    public int Manpower { get; private set; }
 
     public ProvinceTerrain Terrain { get; }
 
@@ -59,4 +59,18 @@ public sealed class Province
     public MapPoint CapitalPosition { get; }
 
     public IReadOnlyList<MapPoint> Polygon { get; }
+
+    internal int ApplyPopulationGrowth(int amount)
+    {
+        if (amount <= 0)
+        {
+            return 0;
+        }
+
+        Population += amount;
+        var newManpower = (int)(Population * 0.075d);
+        var manpowerGrowth = Math.Max(0, newManpower - Manpower);
+        Manpower += manpowerGrowth;
+        return manpowerGrowth;
+    }
 }

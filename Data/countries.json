@@ -4,27 +4,31 @@
     "name": "An Lưu",
     "mapColor": "#C96E55",
     "isAiControlled": false,
-    "capitalProvinceId": 7
+    "capitalProvinceId": 7,
+    "treasury": 8000
   },
   {
     "countryId": 2,
     "name": "Dạ Lam",
     "mapColor": "#5D9C90",
     "isAiControlled": true,
-    "capitalProvinceId": 9
+    "capitalProvinceId": 9,
+    "treasury": 6500
   },
   {
     "countryId": 3,
     "name": "Minh Sa",
     "mapColor": "#7E88B5",
     "isAiControlled": true,
-    "capitalProvinceId": 16
+    "capitalProvinceId": 16,
+    "treasury": 7000
   },
   {
     "countryId": 4,
     "name": "Tùng Hải",
     "mapColor": "#C3A451",
     "isAiControlled": true,
-    "capitalProvinceId": 18
+    "capitalProvinceId": 18,
+    "treasury": 5500
   }
 ]
