@@ -1,0 +1,8 @@
+.godot/
+**/tests/**/.godot/
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.tmp

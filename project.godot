@@ -1,0 +1,29 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; but it can be designed here.
+
+config_version=5
+
+[application]
+
+config/name="Age of History - Grand Strategy"
+config/description="2D Grand Strategy Game built with Godot 4 and C#"
+run/main_scene="res://Scenes/Main.tscn"
+config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/mode=0
+window/size/resizable=true
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[dotnet]
+
+project/assembly_name="AOH.Game"
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0

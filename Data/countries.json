@@ -1,0 +1,30 @@
+[
+  {
+    "countryId": 1,
+    "name": "An Lưu",
+    "mapColor": "#C96E55",
+    "isAiControlled": false,
+    "capitalProvinceId": 7
+  },
+  {
+    "countryId": 2,
+    "name": "Dạ Lam",
+    "mapColor": "#5D9C90",
+    "isAiControlled": true,
+    "capitalProvinceId": 9
+  },
+  {
+    "countryId": 3,
+    "name": "Minh Sa",
+    "mapColor": "#7E88B5",
+    "isAiControlled": true,
+    "capitalProvinceId": 16
+  },
+  {
+    "countryId": 4,
+    "name": "Tùng Hải",
+    "mapColor": "#C3A451",
+    "isAiControlled": true,
+    "capitalProvinceId": 18
+  }
+]
