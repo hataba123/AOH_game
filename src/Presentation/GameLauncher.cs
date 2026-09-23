@@ -21,9 +21,14 @@ public partial class GameLauncher : Control
     {
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore;
+        DisplayServer.WindowSetMinSize(new Vector2I(800, 600));
         LoadDisplaySettings();
+        var currentWindowSize = DisplayServer.WindowGetSize();
+        DisplayServer.WindowSetSize(FitResolutionToScreen(currentWindowSize.X, currentWindowSize.Y));
         BuildMenu();
         UpdateContinueButton();
+        Resized += ApplyResponsiveLayout;
+        ApplyResponsiveLayout();
         CenterWindowOnCurrentScreen();
     }
 
@@ -191,14 +196,15 @@ public partial class GameLauncher : Control
     private void ApplyResolution(int width, int height)
     {
         DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed);
-        DisplayServer.WindowSetSize(new Vector2I(width, height));
+        var appliedSize = FitResolutionToScreen(width, height);
+        DisplayServer.WindowSetSize(appliedSize);
         CenterWindowOnCurrentScreen();
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
-            var settings = new DisplaySettings { Width = width, Height = height };
+            var settings = new DisplaySettings { Width = appliedSize.X, Height = appliedSize.Y };
             File.WriteAllText(_settingsPath, JsonSerializer.Serialize(settings));
-            ShowStatus($"Đã đặt cửa sổ {width} × {height}.", isError: false);
+            ShowStatus($"Đã đặt cửa sổ {appliedSize.X} × {appliedSize.Y}.", isError: false);
         }
         catch (Exception exception)
         {
@@ -221,7 +227,7 @@ public partial class GameLauncher : Control
                 return;
             }
 
-            DisplayServer.WindowSetSize(new Vector2I(settings.Width, settings.Height));
+            DisplayServer.WindowSetSize(FitResolutionToScreen(settings.Width, settings.Height));
         }
         catch (Exception exception)
         {
@@ -236,6 +242,27 @@ public partial class GameLauncher : Control
         var windowSize = DisplayServer.WindowGetSize();
         var centeredPosition = usableArea.Position + ((usableArea.Size - windowSize) / 2);
         DisplayServer.WindowSetPosition(centeredPosition);
+    }
+
+    private static Vector2I FitResolutionToScreen(int width, int height)
+    {
+        var usableSize = DisplayServer.ScreenGetUsableRect(DisplayServer.WindowGetCurrentScreen()).Size;
+        var maximumSize = new Vector2I(Math.Max(800, usableSize.X - 16), Math.Max(600, usableSize.Y - 48));
+        var scale = Math.Min(1f, Math.Min(maximumSize.X / (float)width, maximumSize.Y / (float)height));
+        return new Vector2I(Math.Max(800, Mathf.RoundToInt(width * scale)), Math.Max(600, Mathf.RoundToInt(height * scale)));
+    }
+
+    private void ApplyResponsiveLayout()
+    {
+        var viewportSize = GetViewportRect().Size;
+        if (viewportSize.X <= 0f || viewportSize.Y <= 0f || _menuPanel is null || _settingsPanel is null)
+        {
+            return;
+        }
+
+        var availableSize = new Vector2(Math.Max(440f, viewportSize.X - 40f), Math.Max(360f, viewportSize.Y - 40f));
+        _menuPanel.CustomMinimumSize = new Vector2(Math.Min(460f, availableSize.X), Math.Min(520f, availableSize.Y));
+        _settingsPanel.CustomMinimumSize = new Vector2(Math.Min(560f, availableSize.X), Math.Min(410f, availableSize.Y));
     }
 
     private void ShowStatus(string message, bool isError)

@@ -18,7 +18,11 @@ public partial class GameHud : Control
     private Label _dateLabel = null!;
     private Label _worldStatsLabel = null!;
     private Button[] _speedButtons = [];
+    private Button _ledgerButton = null!;
+    private Button _saveButton = null!;
+    private Button _menuButton = null!;
     private PanelContainer _provincePanel = null!;
+    private ScrollContainer _provinceScroll = null!;
     private Label _provinceNameLabel = null!;
     private Label _terrainBadge = null!;
     private Label _coastalBadge = null!;
@@ -42,6 +46,8 @@ public partial class GameHud : Control
     private PanelContainer _ledgerModal = null!;
     private VBoxContainer _ledgerListContainer = null!;
     private PanelContainer _placeholderCard = null!;
+    private PanelContainer _navigationHintPanel = null!;
+    private Label _navigationHintLabel = null!;
     private PanelContainer _toastPanel = null!;
     private Label _toastLabel = null!;
     private double _toastRemainingSeconds;
@@ -58,6 +64,8 @@ public partial class GameHud : Control
         UpdateProvinceDisplay(-1);
         HideTooltip();
         _ledgerModal.Visible = false;
+        Resized += ApplyResponsiveLayout;
+        ApplyResponsiveLayout();
     }
 
     public override void _Process(double delta)
@@ -82,16 +90,18 @@ public partial class GameHud : Control
             float targetX = mousePos.X + 18f;
             float targetY = mousePos.Y + 18f;
 
-            // Clamp so tooltip doesn't go off screen
-            if (targetX + _hoverTooltip.Size.X > viewportSize.X - 12f)
+            if (targetX + _hoverTooltip.Size.X > viewportSize.X - 8f)
             {
                 targetX = mousePos.X - _hoverTooltip.Size.X - 18f;
             }
 
-            if (targetY + _hoverTooltip.Size.Y > viewportSize.Y - 12f)
+            if (targetY + _hoverTooltip.Size.Y > viewportSize.Y - 8f)
             {
                 targetY = mousePos.Y - _hoverTooltip.Size.Y - 18f;
             }
+
+            targetX = Mathf.Clamp(targetX, 8f, Mathf.Max(8f, viewportSize.X - _hoverTooltip.Size.X - 8f));
+            targetY = Mathf.Clamp(targetY, 8f, Mathf.Max(8f, viewportSize.Y - _hoverTooltip.Size.Y - 8f));
 
             _hoverTooltip.Position = new Vector2(targetX, targetY);
         }
@@ -293,6 +303,7 @@ public partial class GameHud : Control
                     UpdateArmyStatus();
                 },
                 isActive: armyId == _selectedArmyId);
+            button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             _armyListContainer.AddChild(button);
         }
     }
@@ -359,6 +370,8 @@ public partial class GameHud : Control
     {
         if (_session is null) return;
 
+        var compactLayout = GetViewportRect().Size.X < 1_100f;
+
         foreach (var child in _ledgerListContainer.GetChildren())
         {
             child.QueueFree();
@@ -377,12 +390,15 @@ public partial class GameHud : Control
             double treasury = country["treasury"].AsDouble();
             double income = country["income"].AsDouble();
 
-            var row = new PanelContainer();
+            var row = new PanelContainer
+            {
+                SizeFlagsHorizontal = SizeFlags.ExpandFill
+            };
             var rowStyle = CreateStyleBox(new Color("#16202e"), new Color("#2d3d52"), 1, 4, 8, 8);
             row.AddThemeStyleboxOverride("panel", rowStyle);
 
             var hBox = new HBoxContainer();
-            hBox.AddThemeConstantOverride("separation", 16);
+            hBox.AddThemeConstantOverride("separation", compactLayout ? 8 : 16);
 
             var colorBar = new ColorRect
             {
@@ -403,7 +419,7 @@ public partial class GameHud : Control
             var provLabel = new Label
             {
                 Text = $"{provCount} Tỉnh",
-                CustomMinimumSize = new Vector2(80, 0),
+                CustomMinimumSize = new Vector2(compactLayout ? 60 : 80, 0),
                 HorizontalAlignment = HorizontalAlignment.Right
             };
             provLabel.AddThemeColorOverride("font_color", new Color("#fbbf24"));
@@ -412,18 +428,21 @@ public partial class GameHud : Control
 
             var treasuryLabel = new Label
             {
-                Text = $"💰 {treasury.ToString("N0", CultureInfo.InvariantCulture)} (+{income.ToString("N0", CultureInfo.InvariantCulture)}/ngày)",
-                CustomMinimumSize = new Vector2(170, 0),
+                Text = compactLayout
+                    ? $"💰 {treasury.ToString("N0", CultureInfo.InvariantCulture)} (+{income.ToString("N0", CultureInfo.InvariantCulture)})"
+                    : $"💰 {treasury.ToString("N0", CultureInfo.InvariantCulture)} (+{income.ToString("N0", CultureInfo.InvariantCulture)}/ngày)",
+                CustomMinimumSize = new Vector2(compactLayout ? 136 : 170, 0),
                 HorizontalAlignment = HorizontalAlignment.Right
             };
+            treasuryLabel.TooltipText = $"Ngân khố: {treasury.ToString("N0", CultureInfo.InvariantCulture)}; thu nhập: {income.ToString("N0", CultureInfo.InvariantCulture)} mỗi ngày";
             treasuryLabel.AddThemeColorOverride("font_color", new Color("#4ade80"));
             treasuryLabel.AddThemeFontSizeOverride("font_size", 12);
             hBox.AddChild(treasuryLabel);
 
             var aiBadge = new Label
             {
-                Text = isAi ? "🤖 AI" : "👑 Người chơi",
-                CustomMinimumSize = new Vector2(110, 0),
+                Text = compactLayout ? (isAi ? "🤖 AI" : "👑 Bạn") : (isAi ? "🤖 AI điều khiển" : "👑 Người chơi"),
+                CustomMinimumSize = new Vector2(compactLayout ? 88 : 120, 0),
                 HorizontalAlignment = HorizontalAlignment.Right
             };
             aiBadge.AddThemeColorOverride("font_color", isAi ? new Color("#94a3b8") : new Color("#4ade80"));
@@ -432,17 +451,20 @@ public partial class GameHud : Control
 
             var relationLabel = new Label
             {
-                Text = isAtWar ? $"Chiến tranh ({warScore:+0;-0;0})" : "Hòa bình",
-                CustomMinimumSize = new Vector2(115, 0),
+                Text = compactLayout
+                    ? (isAtWar ? $"⚔ {warScore:+0;-0;0}" : "Hòa bình")
+                    : (isAtWar ? $"Chiến tranh ({warScore:+0;-0;0})" : "Hòa bình"),
+                CustomMinimumSize = new Vector2(compactLayout ? 88 : 112, 0),
                 HorizontalAlignment = HorizontalAlignment.Center
             };
+            relationLabel.TooltipText = isAtWar ? $"Đang chiến tranh · điểm chiến tranh {warScore:+0;-0;0}" : "Đang hòa bình";
             relationLabel.AddThemeColorOverride("font_color", isAtWar ? new Color("#fb7185") : new Color("#94a3b8"));
             relationLabel.AddThemeFontSizeOverride("font_size", 12);
             hBox.AddChild(relationLabel);
 
             if (isAi)
             {
-                var diplomacyButton = CreateStyledButton(isAtWar ? "Hòa ước" : "Tuyên chiến", () =>
+                var diplomacyButton = CreateStyledButton(compactLayout ? (isAtWar ? "Hòa" : "Chiến") : (isAtWar ? "Hòa ước" : "Tuyên chiến"), () =>
                 {
                     if (_session is null)
                     {
@@ -454,10 +476,12 @@ public partial class GameHud : Control
                     {
                         relationLabel.Text = result["message"].AsString();
                     }
-                }, new Vector2(100, 34), isActive: isAtWar);
+                }, new Vector2(compactLayout ? 72 : 100, 34), isActive: isAtWar);
+                diplomacyButton.TooltipText = isAtWar ? "Đề nghị hòa ước" : "Tuyên chiến";
                 hBox.AddChild(diplomacyButton);
             }
 
+            hBox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             row.AddChild(hBox);
             _ledgerListContainer.AddChild(row);
         }
@@ -489,8 +513,76 @@ public partial class GameHud : Control
         int speed = summary.ContainsKey("speed") ? summary["speed"].AsInt32() : 0;
 
         _dateLabel.Text = string.IsNullOrEmpty(date) ? "Ngày chưa xác định" : $"Ngày {date}";
-        _worldStatsLabel.Text = $"🗺️ {provinceCount} Tỉnh   │   👑 {countryCount} Vương Triều   │   ⚔️ {armyCount} Quân   │   🛡️ {warCount} Chiến tranh   │   💰 {treasury.ToString("N0", CultureInfo.InvariantCulture)} (+{income.ToString("N0", CultureInfo.InvariantCulture)}/ngày)";
+        _worldStatsLabel.Text = $"🗺 {provinceCount} tỉnh   ·   👑 {countryCount} vương triều   ·   ⚔ {armyCount} quân   ·   🛡 {warCount} cuộc chiến   ·   💰 {treasury.ToString("N0", CultureInfo.InvariantCulture)} (+{income.ToString("N0", CultureInfo.InvariantCulture)}/ngày)";
         UpdateSpeedButtons(speed);
+    }
+
+    private void ApplyResponsiveLayout()
+    {
+        var viewportSize = GetViewportRect().Size;
+        if (viewportSize.X <= 0f || viewportSize.Y <= 0f || _topBar is null)
+        {
+            return;
+        }
+
+        const float topBarHeight = 96f;
+        const float horizontalMargin = 14f;
+        const float bottomMargin = 12f;
+        var isCompact = viewportSize.X < 1_100f;
+
+        _topBar.CustomMinimumSize = new Vector2(0f, topBarHeight);
+        _topBar.OffsetLeft = horizontalMargin;
+        _topBar.OffsetTop = 10f;
+        _topBar.OffsetRight = -horizontalMargin;
+        _topBar.OffsetBottom = 10f + topBarHeight;
+
+        _ledgerButton.Text = isCompact ? "📜" : "📜 Vương triều";
+        _saveButton.Text = isCompact ? "💾" : "💾 Lưu";
+        _menuButton.Text = isCompact ? "⌂" : "⌂ Menu";
+        _ledgerButton.CustomMinimumSize = new Vector2(isCompact ? 36f : 132f, 34f);
+        _saveButton.CustomMinimumSize = new Vector2(isCompact ? 36f : 76f, 34f);
+        _menuButton.CustomMinimumSize = new Vector2(isCompact ? 36f : 80f, 34f);
+        _worldStatsLabel.AddThemeFontSizeOverride("font_size", isCompact ? 11 : 12);
+
+        var panelTop = 10f + topBarHeight + 12f;
+        var panelWidth = Mathf.Clamp(viewportSize.X * 0.30f, 320f, 420f);
+        var panelHeight = Mathf.Max(160f, viewportSize.Y - panelTop - bottomMargin);
+        _provincePanel.CustomMinimumSize = Vector2.Zero;
+        _provincePanel.Position = new Vector2(16f, panelTop);
+        _provincePanel.Size = new Vector2(panelWidth, panelHeight);
+
+        var placeholderWidth = Mathf.Min(360f, viewportSize.X - 32f);
+        _placeholderCard.CustomMinimumSize = new Vector2(placeholderWidth, 70f);
+        _placeholderCard.Position = new Vector2(16f, panelTop);
+        _placeholderCard.Size = _placeholderCard.CustomMinimumSize;
+
+        var modalWidth = Mathf.Min(1_000f, viewportSize.X - 32f);
+        var modalHeight = Mathf.Min(680f, viewportSize.Y - 32f);
+        _ledgerModal.CustomMinimumSize = Vector2.Zero;
+        _ledgerModal.Size = new Vector2(modalWidth, modalHeight);
+        _ledgerModal.Position = (viewportSize - _ledgerModal.Size) / 2f;
+
+        var hintWidth = Mathf.Min(520f, viewportSize.X * 0.54f);
+        const float hintHeight = 58f;
+        _navigationHintPanel.CustomMinimumSize = Vector2.Zero;
+        _navigationHintPanel.Position = new Vector2(viewportSize.X - hintWidth - 16f, viewportSize.Y - hintHeight - 10f);
+        _navigationHintPanel.Size = new Vector2(hintWidth, hintHeight);
+
+        var mapAreaLeft = panelWidth + 32f;
+        var toastWidth = Mathf.Min(480f, viewportSize.X - mapAreaLeft - 16f);
+        _toastPanel.CustomMinimumSize = new Vector2(toastWidth, 48f);
+        var toastX = mapAreaLeft + ((viewportSize.X - 16f - mapAreaLeft - toastWidth) / 2f);
+        _toastPanel.Position = new Vector2(toastX, viewportSize.Y - hintHeight - 66f);
+        _toastPanel.Size = _toastPanel.CustomMinimumSize;
+
+        var debugWidth = Mathf.Min(360f, viewportSize.X - 32f);
+        _debugOverlay.CustomMinimumSize = new Vector2(debugWidth, 132f);
+        _debugOverlay.Position = new Vector2(viewportSize.X - debugWidth - 14f, panelTop);
+        _debugOverlay.Size = _debugOverlay.CustomMinimumSize;
+
+        var tooltipWidth = Mathf.Min(280f, viewportSize.X - 32f);
+        _hoverTooltip.CustomMinimumSize = new Vector2(tooltipWidth, 85f);
+        _hoverTooltip.Size = new Vector2(tooltipWidth, 92f);
     }
 
     private void UpdateSpeedButtons(int speed)
@@ -515,14 +607,10 @@ public partial class GameHud : Control
     {
         _topBar = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(0, 54),
+            CustomMinimumSize = new Vector2(0, 96),
             MouseFilter = MouseFilterEnum.Stop
         };
         _topBar.SetAnchorsPreset(LayoutPreset.TopWide);
-        _topBar.OffsetLeft = 14;
-        _topBar.OffsetTop = 10;
-        _topBar.OffsetRight = -14;
-        _topBar.OffsetBottom = 64;
 
         var barStyle = CreateStyleBox(
             bgColor: new Color(0.05f, 0.08f, 0.12f, 0.94f),
@@ -534,11 +622,17 @@ public partial class GameHud : Control
         );
         _topBar.AddThemeStyleboxOverride("panel", barStyle);
 
-        var hBox = new HBoxContainer();
-        hBox.AddThemeConstantOverride("separation", 24);
+        var barContent = new VBoxContainer();
+        barContent.AddThemeConstantOverride("separation", 4);
+
+        var topRow = new HBoxContainer();
+        topRow.AddThemeConstantOverride("separation", 12);
 
         // Title & Crest
-        var titleBox = new HBoxContainer();
+        var titleBox = new HBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         titleBox.AddThemeConstantOverride("separation", 8);
 
         var crest = new Label { Text = "⚔️" };
@@ -555,31 +649,24 @@ public partial class GameHud : Control
         _dateLabel.AddThemeFontSizeOverride("font_size", 12);
         titleBox.AddChild(_dateLabel);
 
-        hBox.AddChild(titleBox);
-
-        // Global stats (Center)
-        _worldStatsLabel = new Label
-        {
-            Text = "Đang đồng bộ dữ liệu thế giới...",
-            HorizontalAlignment = HorizontalAlignment.Center,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        _worldStatsLabel.AddThemeColorOverride("font_color", new Color("#e2e8f0"));
-        _worldStatsLabel.AddThemeFontSizeOverride("font_size", 14);
-        hBox.AddChild(_worldStatsLabel);
+        topRow.AddChild(titleBox);
 
         // Speed & Controls (Right)
-        var controlsBox = new HBoxContainer();
+        var controlsBox = new HBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ShrinkEnd
+        };
         controlsBox.AddThemeConstantOverride("separation", 8);
 
-        var ledgerBtn = CreateStyledButton("📜 Vương Triều", () =>
+        _ledgerButton = CreateStyledButton("📜 Vương triều", () =>
         {
             _ledgerModal.Visible = !_ledgerModal.Visible;
             if (_ledgerModal.Visible) PopulateLedger();
         });
-        controlsBox.AddChild(ledgerBtn);
+        _ledgerButton.TooltipText = "Xem các vương triều";
+        controlsBox.AddChild(_ledgerButton);
 
-        var saveBtn = CreateStyledButton("💾 Lưu", () =>
+        _saveButton = CreateStyledButton("💾 Lưu", () =>
         {
             var result = _session?.SaveGame("autosave");
             if (result is not null)
@@ -587,9 +674,10 @@ public partial class GameHud : Control
                 ShowToast(result["message"].AsString());
             }
         });
-        controlsBox.AddChild(saveBtn);
+        _saveButton.TooltipText = "Lưu chiến dịch";
+        controlsBox.AddChild(_saveButton);
 
-        var menuBtn = CreateStyledButton("🏠 Menu", () =>
+        _menuButton = CreateStyledButton("⌂ Menu", () =>
         {
             if (_session is null)
             {
@@ -603,7 +691,8 @@ public partial class GameHud : Control
                 _session.ExitToMenu();
             }
         });
-        controlsBox.AddChild(menuBtn);
+        _menuButton.TooltipText = "Lưu và về menu chính";
+        controlsBox.AddChild(_menuButton);
 
         _speedButtons = new Button[6];
         for (var speed = 0; speed < _speedButtons.Length; speed++)
@@ -615,9 +704,22 @@ public partial class GameHud : Control
             controlsBox.AddChild(speedButton);
         }
 
-        hBox.AddChild(controlsBox);
+        topRow.AddChild(controlsBox);
 
-        _topBar.AddChild(hBox);
+        _worldStatsLabel = new Label
+        {
+            Text = "Đang đồng bộ dữ liệu thế giới...",
+            HorizontalAlignment = HorizontalAlignment.Left,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        _worldStatsLabel.AddThemeColorOverride("font_color", new Color("#cbd5e1"));
+        _worldStatsLabel.AddThemeFontSizeOverride("font_size", 12);
+
+        barContent.AddChild(topRow);
+        barContent.AddChild(_worldStatsLabel);
+
+        _topBar.AddChild(barContent);
         AddChild(_topBar);
     }
 
@@ -625,15 +727,10 @@ public partial class GameHud : Control
     {
         _provincePanel = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(380, 560),
+            CustomMinimumSize = Vector2.Zero,
             MouseFilter = MouseFilterEnum.Stop
         };
         _provincePanel.SetAnchorsPreset(LayoutPreset.TopLeft);
-        _provincePanel.OffsetLeft = 16;
-        _provincePanel.OffsetTop = 76;
-        _provincePanel.OffsetRight = 396;
-        _provincePanel.OffsetBottom = 760;
-        _provincePanel.CustomMinimumSize = new Vector2(380, 680);
 
         var panelStyle = CreateStyleBox(
             bgColor: new Color(0.06f, 0.09f, 0.14f, 0.96f),
@@ -645,7 +742,19 @@ public partial class GameHud : Control
         );
         _provincePanel.AddThemeStyleboxOverride("panel", panelStyle);
 
-        var vBox = new VBoxContainer();
+        _provinceScroll = new ScrollContainer
+        {
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+
+        var vBox = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
         vBox.AddThemeConstantOverride("separation", 14);
 
         // Header with Province Name & Close button
@@ -653,7 +762,8 @@ public partial class GameHud : Control
         _provinceNameLabel = new Label
         {
             Text = "Tên Tỉnh",
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
         _provinceNameLabel.AddThemeColorOverride("font_color", new Color("#ffd166"));
         _provinceNameLabel.AddThemeFontSizeOverride("font_size", 22);
@@ -671,16 +781,20 @@ public partial class GameHud : Control
         var badgeRow = new HBoxContainer();
         badgeRow.AddThemeConstantOverride("separation", 8);
 
-        _terrainBadge = CreateBadge("Đồng Bằng", new Color("#22c55e"));
+        _terrainBadge = CreateBadge("Đồng bằng", new Color("#22c55e"));
+        _terrainBadge.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         badgeRow.AddChild(_terrainBadge);
 
-        _coastalBadge = CreateBadge("Ven Biển", new Color("#38bdf8"));
+        _coastalBadge = CreateBadge("Ven biển", new Color("#38bdf8"));
+        _coastalBadge.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _coastalBadge.HorizontalAlignment = HorizontalAlignment.Right;
         badgeRow.AddChild(_coastalBadge);
 
         vBox.AddChild(badgeRow);
 
         // Sovereign Banner
         var bannerBox = new PanelContainer();
+        bannerBox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         var bannerStyle = CreateStyleBox(new Color("#121b28"), new Color("#1e2d42"), 1, 6, 12, 10);
         bannerBox.AddThemeStyleboxOverride("panel", bannerStyle);
 
@@ -694,13 +808,25 @@ public partial class GameHud : Control
         };
         bannerHBox.AddChild(_ownerColorBar);
 
-        var ownerInfoBox = new VBoxContainer();
-        _ownerCountryLabel = new Label { Text = "Đại Việt" };
+        var ownerInfoBox = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        _ownerCountryLabel = new Label
+        {
+            Text = "Đại Việt",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         _ownerCountryLabel.AddThemeColorOverride("font_color", new Color("#f8fafc"));
         _ownerCountryLabel.AddThemeFontSizeOverride("font_size", 16);
         ownerInfoBox.AddChild(_ownerCountryLabel);
 
-        _controllerLabel = new Label { Text = "🛡️ Chủ quyền toàn vẹn" };
+        _controllerLabel = new Label
+        {
+            Text = "🛡 Chủ quyền toàn vẹn",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
         _controllerLabel.AddThemeColorOverride("font_color", new Color("#94a3b8"));
         _controllerLabel.AddThemeFontSizeOverride("font_size", 12);
         ownerInfoBox.AddChild(_controllerLabel);
@@ -768,12 +894,14 @@ public partial class GameHud : Control
                 UpdateArmyList(_selectedProvinceId);
             }
         });
+        recruitBtn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _actionsContainer.AddChild(recruitBtn);
 
         var buildBtn = CreateStyledButton("🏰 Xây Dựng Công Trình", () =>
         {
             GD.Print("Xây dựng công trình chưa có trong mốc hiện tại.");
         });
+        buildBtn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _actionsContainer.AddChild(buildBtn);
 
         _armyStatusLabel = new Label
@@ -800,6 +928,7 @@ public partial class GameHud : Control
                 UpdateArmyStatus();
             }
         });
+        moveArmyBtn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _actionsContainer.AddChild(moveArmyBtn);
 
         _armyListContainer = new VBoxContainer();
@@ -817,7 +946,8 @@ public partial class GameHud : Control
         _neighborsContainer = new VBoxContainer();
         vBox.AddChild(_neighborsContainer);
 
-        _provincePanel.AddChild(vBox);
+        _provinceScroll.AddChild(vBox);
+        _provincePanel.AddChild(_provinceScroll);
         AddChild(_provincePanel);
     }
 
@@ -829,10 +959,6 @@ public partial class GameHud : Control
             MouseFilter = MouseFilterEnum.Ignore
         };
         _placeholderCard.SetAnchorsPreset(LayoutPreset.TopLeft);
-        _placeholderCard.OffsetLeft = 16;
-        _placeholderCard.OffsetTop = 76;
-        _placeholderCard.OffsetRight = 356;
-        _placeholderCard.OffsetBottom = 146;
 
         var cardStyle = CreateStyleBox(new Color(0.06f, 0.09f, 0.14f, 0.82f), new Color("#334155"), 1, 8, 14, 12);
         _placeholderCard.AddThemeStyleboxOverride("panel", cardStyle);
@@ -841,7 +967,8 @@ public partial class GameHud : Control
         {
             Text = "🗺️ Nhấp chuột vào bất kỳ tỉnh thành nào\nđể xem thông tin chiến lược & chỉ huy.",
             HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
         label.AddThemeColorOverride("font_color", new Color("#94a3b8"));
         label.AddThemeFontSizeOverride("font_size", 13);
@@ -854,7 +981,7 @@ public partial class GameHud : Control
     {
         _hoverTooltip = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(230, 85),
+            CustomMinimumSize = new Vector2(280, 85),
             MouseFilter = MouseFilterEnum.Ignore,
             Visible = false
         };
@@ -883,7 +1010,12 @@ public partial class GameHud : Control
         };
         topRow.AddChild(_tooltipColorPill);
 
-        _tooltipName = new Label { Text = "Tên Tỉnh" };
+        _tooltipName = new Label
+        {
+            Text = "Tên tỉnh",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         _tooltipName.AddThemeColorOverride("font_color", new Color("#ffd166"));
         _tooltipName.AddThemeFontSizeOverride("font_size", 15);
         topRow.AddChild(_tooltipName);
@@ -891,11 +1023,13 @@ public partial class GameHud : Control
         vBox.AddChild(topRow);
 
         _tooltipOwner = new Label { Text = "Quốc gia sở hữu" };
+        _tooltipOwner.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _tooltipOwner.AddThemeColorOverride("font_color", new Color("#cbd5e1"));
         _tooltipOwner.AddThemeFontSizeOverride("font_size", 13);
         vBox.AddChild(_tooltipOwner);
 
         _tooltipDetails = new Label { Text = "Địa hình • Dân số" };
+        _tooltipDetails.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _tooltipDetails.AddThemeColorOverride("font_color", new Color("#94a3b8"));
         _tooltipDetails.AddThemeFontSizeOverride("font_size", 11);
         vBox.AddChild(_tooltipDetails);
@@ -908,15 +1042,11 @@ public partial class GameHud : Control
     {
         _ledgerModal = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(850, 440),
+            CustomMinimumSize = Vector2.Zero,
             MouseFilter = MouseFilterEnum.Stop,
             Visible = false
         };
-        _ledgerModal.SetAnchorsPreset(LayoutPreset.Center);
-        _ledgerModal.OffsetLeft = -425;
-        _ledgerModal.OffsetTop = -220;
-        _ledgerModal.OffsetRight = 425;
-        _ledgerModal.OffsetBottom = 220;
+        _ledgerModal.SetAnchorsPreset(LayoutPreset.TopLeft);
 
         var modalStyle = CreateStyleBox(
             bgColor: new Color(0.05f, 0.08f, 0.13f, 0.98f),
@@ -952,6 +1082,9 @@ public partial class GameHud : Control
         // Scroll list
         var scroll = new ScrollContainer
         {
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
 
@@ -968,43 +1101,40 @@ public partial class GameHud : Control
 
     private void BuildNavigationHint()
     {
-        var hintPanel = new PanelContainer
+        _navigationHintPanel = new PanelContainer
         {
+            CustomMinimumSize = Vector2.Zero,
             MouseFilter = MouseFilterEnum.Ignore
         };
-        hintPanel.SetAnchorsPreset(LayoutPreset.BottomRight);
-        hintPanel.OffsetLeft = -520;
-        hintPanel.OffsetTop = -42;
-        hintPanel.OffsetRight = -16;
-        hintPanel.OffsetBottom = -10;
+        _navigationHintPanel.SetAnchorsPreset(LayoutPreset.TopLeft);
 
         var hintStyle = CreateStyleBox(new Color(0.05f, 0.08f, 0.12f, 0.80f), new Color("#334155"), 1, 6, 14, 6);
-        hintPanel.AddThemeStyleboxOverride("panel", hintStyle);
+        _navigationHintPanel.AddThemeStyleboxOverride("panel", hintStyle);
 
-        var label = new Label
+        _navigationHintLabel = new Label
         {
-            Text = "WASD / Chuột giữa: Di chuyển   │   Lăn chuột: Phóng to/Thu nhỏ   │   Chuột trái: Chọn tỉnh"
+            Text = "WASD / chuột giữa: di chuyển  ·  Lăn chuột: thu phóng  ·  Chuột trái: chọn tỉnh",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        label.AddThemeColorOverride("font_color", new Color("#94a3b8"));
-        label.AddThemeFontSizeOverride("font_size", 12);
-        hintPanel.AddChild(label);
+        _navigationHintLabel.AddThemeColorOverride("font_color", new Color("#94a3b8"));
+        _navigationHintLabel.AddThemeFontSizeOverride("font_size", 11);
+        _navigationHintPanel.AddChild(_navigationHintLabel);
 
-        AddChild(hintPanel);
+        AddChild(_navigationHintPanel);
     }
 
     private void BuildToast()
     {
         _toastPanel = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(320, 42),
+            CustomMinimumSize = new Vector2(480, 48),
             Visible = false,
             MouseFilter = MouseFilterEnum.Ignore
         };
-        _toastPanel.SetAnchorsPreset(LayoutPreset.BottomWide);
-        _toastPanel.OffsetLeft = 0;
-        _toastPanel.OffsetTop = -66;
-        _toastPanel.OffsetRight = 0;
-        _toastPanel.OffsetBottom = -18;
+        _toastPanel.SetAnchorsPreset(LayoutPreset.TopLeft);
         _toastPanel.AddThemeStyleboxOverride("panel", CreateStyleBox(
             new Color(0.05f, 0.08f, 0.12f, 0.96f),
             new Color("#c89b3c"),
@@ -1015,7 +1145,9 @@ public partial class GameHud : Control
         _toastLabel = new Label
         {
             HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
         _toastLabel.AddThemeColorOverride("font_color", new Color("#f8fafc"));
         _toastPanel.AddChild(_toastLabel);
@@ -1033,15 +1165,11 @@ public partial class GameHud : Control
     {
         _debugOverlay = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(300, 132),
+            CustomMinimumSize = new Vector2(360, 132),
             Visible = false,
             MouseFilter = MouseFilterEnum.Ignore
         };
-        _debugOverlay.SetAnchorsPreset(LayoutPreset.TopRight);
-        _debugOverlay.OffsetLeft = -318;
-        _debugOverlay.OffsetTop = 74;
-        _debugOverlay.OffsetRight = -14;
-        _debugOverlay.OffsetBottom = 210;
+        _debugOverlay.SetAnchorsPreset(LayoutPreset.TopLeft);
         _debugOverlay.AddThemeStyleboxOverride("panel", CreateStyleBox(
             new Color(0.04f, 0.07f, 0.12f, 0.94f),
             new Color("#475569"),

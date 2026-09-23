@@ -10,7 +10,7 @@ public partial class ProvinceMap : Node2D
 {
     private const float MapWidth = 1600f;
     private const float MapHeight = 1000f;
-    private const float MinimumZoom = 0.45f;
+    private const float MinimumZoom = 0.35f;
     private const float MaximumZoom = 1.55f;
     private const float InitialZoom = 0.7f;
     private static readonly Color SeaFill = new("#152F37");
@@ -31,6 +31,9 @@ public partial class ProvinceMap : Node2D
     private ProvinceId? _hoveredProvinceId;
     private ArmyId? _selectedArmyId;
     private bool _isPanning;
+    private bool _hasUserNavigatedMap;
+    private Vector2 _lastViewportSize;
+    private Rect2 _worldBounds = new(0f, 0f, MapWidth, MapHeight);
 
     public event Action<ProvinceId?>? ProvinceSelectionChanged;
 
@@ -43,7 +46,7 @@ public partial class ProvinceMap : Node2D
         _camera = new Camera2D
         {
             Name = "MapCamera",
-            Position = new Vector2(515f, 480f),
+            Position = new Vector2(MapWidth / 2f, MapHeight / 2f),
             Zoom = Vector2.One * InitialZoom,
             IgnoreRotation = true
         };
@@ -73,6 +76,7 @@ public partial class ProvinceMap : Node2D
         }
 
         _coastlineSegments = BuildCoastline(world);
+        _worldBounds = CalculateWorldBounds(world);
         QueueRedraw();
     }
 
@@ -85,6 +89,11 @@ public partial class ProvinceMap : Node2D
     public override void _Ready()
     {
         _camera.MakeCurrent();
+        _lastViewportSize = GetViewportRect().Size;
+        if (_lastViewportSize.X > 0f && _lastViewportSize.Y > 0f)
+        {
+            FitCameraToViewport(_lastViewportSize);
+        }
     }
 
     public override void _Draw()
@@ -146,6 +155,16 @@ public partial class ProvinceMap : Node2D
 
     public override void _Process(double delta)
     {
+        var viewportSize = GetViewportRect().Size;
+        if (viewportSize != _lastViewportSize)
+        {
+            _lastViewportSize = viewportSize;
+            if (!_hasUserNavigatedMap)
+            {
+                FitCameraToViewport(viewportSize);
+            }
+        }
+
         if (_world is null)
         {
             return;
@@ -174,6 +193,7 @@ public partial class ProvinceMap : Node2D
 
         if (direction.LengthSquared() > 0f)
         {
+            _hasUserNavigatedMap = true;
             _camera.Position += direction.Normalized() * (520f * (float)delta / _camera.Zoom.X);
         }
     }
@@ -183,6 +203,10 @@ public partial class ProvinceMap : Node2D
         if (mouseButton.ButtonIndex is MouseButton.Right or MouseButton.Middle)
         {
             _isPanning = mouseButton.Pressed;
+            if (mouseButton.Pressed)
+            {
+                _hasUserNavigatedMap = true;
+            }
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -194,6 +218,7 @@ public partial class ProvinceMap : Node2D
 
         if (mouseButton.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
+            _hasUserNavigatedMap = true;
             ZoomAtMouse(mouseButton.ButtonIndex == MouseButton.WheelUp ? 1.12f : 1f / 1.12f, mouseButton.Position);
             GetViewport().SetInputAsHandled();
             return;
@@ -237,6 +262,56 @@ public partial class ProvinceMap : Node2D
         _camera.Zoom = Vector2.One * nextZoom;
         var mapPositionAfterZoom = GetMapPosition(viewportPosition);
         _camera.Position += mapPositionBeforeZoom - mapPositionAfterZoom;
+    }
+
+    private void FitCameraToViewport(Vector2 viewportSize)
+    {
+        if (_worldBounds.Size.X <= 0f || _worldBounds.Size.Y <= 0f)
+        {
+            return;
+        }
+
+        var sidePanelWidth = Mathf.Clamp(viewportSize.X * 0.30f, 320f, 420f);
+        const float leftGap = 32f;
+        const float rightMargin = 16f;
+        const float topInset = 118f;
+        const float bottomInset = 68f;
+        const float mapPadding = 24f;
+
+        var availableWidth = Mathf.Max(1f, viewportSize.X - sidePanelWidth - leftGap - rightMargin - mapPadding);
+        var availableHeight = Mathf.Max(1f, viewportSize.Y - topInset - bottomInset - mapPadding);
+        var zoom = Mathf.Clamp(
+            Mathf.Min(availableWidth / _worldBounds.Size.X, availableHeight / _worldBounds.Size.Y),
+            MinimumZoom,
+            MaximumZoom);
+
+        var mapAreaCenter = new Vector2(
+            (sidePanelWidth + leftGap + viewportSize.X - rightMargin) / 2f,
+            (topInset + viewportSize.Y - bottomInset) / 2f);
+
+        _camera.Zoom = Vector2.One * zoom;
+        _camera.Position = _worldBounds.GetCenter() + ((viewportSize / 2f - mapAreaCenter) / zoom);
+    }
+
+    private static Rect2 CalculateWorldBounds(GameWorld world)
+    {
+        var minimum = new Vector2(float.MaxValue, float.MaxValue);
+        var maximum = new Vector2(float.MinValue, float.MinValue);
+
+        foreach (var province in world.Provinces.Values)
+        {
+            foreach (var point in province.Polygon)
+            {
+                minimum.X = Mathf.Min(minimum.X, point.X);
+                minimum.Y = Mathf.Min(minimum.Y, point.Y);
+                maximum.X = Mathf.Max(maximum.X, point.X);
+                maximum.Y = Mathf.Max(maximum.Y, point.Y);
+            }
+        }
+
+        return minimum.X == float.MaxValue
+            ? new Rect2(0f, 0f, MapWidth, MapHeight)
+            : new Rect2(minimum, maximum - minimum);
     }
 
     private void UpdateHoveredProvince(Vector2 viewportPosition)
@@ -320,6 +395,8 @@ public partial class ProvinceMap : Node2D
         var font = ThemeDB.FallbackFont;
         var labelLimit = _camera.Zoom.X < 0.6f ? 150 : _camera.Zoom.X < 0.9f ? 300 : 600;
         var labelStride = Math.Max(1, (int)Math.Ceiling(_world.Provinces.Count / (double)labelLimit));
+        var labelScale = Mathf.Clamp(0.7f / _camera.Zoom.X, 0.4f, 2f);
+        var labelFontSize = Mathf.RoundToInt(17f * labelScale);
         foreach (var province in _world.Provinces.Values)
         {
             if (province.Id != _selectedProvinceId && province.Id != _hoveredProvinceId && province.Id.Value % labelStride != 0)
@@ -330,8 +407,8 @@ public partial class ProvinceMap : Node2D
             var position = new Vector2(province.CapitalPosition.X, province.CapitalPosition.Y);
             DrawCircle(position, 8f, new Color(0.08f, 0.13f, 0.14f, 0.8f));
             DrawCircle(position, 5f, new Color("#F3E7CA"));
-            DrawString(font, position + new Vector2(0f, 27f), province.Name, HorizontalAlignment.Center, -1f, 17, new Color(0.08f, 0.13f, 0.14f, 0.8f));
-            DrawString(font, position + new Vector2(0f, 25f), province.Name, HorizontalAlignment.Center, -1f, 17, new Color("#F2E9D4"));
+            DrawString(font, position + new Vector2(0f, 27f * labelScale), province.Name, HorizontalAlignment.Center, -1f, labelFontSize, new Color(0.08f, 0.13f, 0.14f, 0.8f));
+            DrawString(font, position + new Vector2(0f, 25f * labelScale), province.Name, HorizontalAlignment.Center, -1f, labelFontSize, new Color("#F2E9D4"));
         }
     }
 
@@ -342,6 +419,7 @@ public partial class ProvinceMap : Node2D
             return;
         }
 
+        var markerScale = Mathf.Clamp(0.7f / _camera.Zoom.X, 0.4f, 2f);
         var stackCounts = new Dictionary<ProvinceId, int>();
         foreach (var army in _world.Armies.Values)
         {
@@ -352,19 +430,19 @@ public partial class ProvinceMap : Node2D
 
             stackCounts.TryGetValue(province.Id, out var stackIndex);
             stackCounts[province.Id] = stackIndex + 1;
-            var offset = new Vector2(((stackIndex % 3) - 1) * 18f, (stackIndex / 3) * 18f);
+            var offset = new Vector2(((stackIndex % 3) - 1) * 18f, (stackIndex / 3) * 18f) * markerScale;
             var position = new Vector2(province.CapitalPosition.X, province.CapitalPosition.Y) + offset;
             var countryColor = Color.FromHtml(_world.Countries[army.OwnerCountryId].MapColor);
 
             if (_selectedArmyId == army.Id)
             {
-                DrawCircle(position, 15f, new Color("#ffd166"));
+                DrawCircle(position, 15f * markerScale, new Color("#ffd166"));
             }
 
-            DrawCircle(position, 12f, new Color("#101820"));
-            DrawCircle(position, 9f, countryColor);
-            DrawArc(position, 9f, 0f, Mathf.Tau, 24, new Color("#f8fafc"), 1.5f, true);
-            DrawString(ThemeDB.FallbackFont, position + new Vector2(15f, 5f), army.Soldiers.ToString("N0", System.Globalization.CultureInfo.InvariantCulture), HorizontalAlignment.Left, -1f, 14, new Color("#f8fafc"));
+            DrawCircle(position, 12f * markerScale, new Color("#101820"));
+            DrawCircle(position, 9f * markerScale, countryColor);
+            DrawArc(position, 9f * markerScale, 0f, Mathf.Tau, 24, new Color("#f8fafc"), 1.5f * markerScale, true);
+            DrawString(ThemeDB.FallbackFont, position + new Vector2(15f, 5f) * markerScale, army.Soldiers.ToString("N0", System.Globalization.CultureInfo.InvariantCulture), HorizontalAlignment.Left, -1f, Mathf.RoundToInt(14f * markerScale), new Color("#f8fafc"));
         }
     }
 
@@ -376,7 +454,9 @@ public partial class ProvinceMap : Node2D
         }
 
         ArmyId? nearestArmyId = null;
-        var nearestDistanceSquared = 20f * 20f;
+        var markerScale = Mathf.Clamp(0.7f / _camera.Zoom.X, 0.4f, 2f);
+        var hitRadius = 20f * markerScale;
+        var nearestDistanceSquared = hitRadius * hitRadius;
         var stackCounts = new Dictionary<ProvinceId, int>();
         foreach (var army in _world.Armies.Values)
         {
@@ -387,7 +467,7 @@ public partial class ProvinceMap : Node2D
 
             stackCounts.TryGetValue(province.Id, out var stackIndex);
             stackCounts[province.Id] = stackIndex + 1;
-            var offset = new Vector2(((stackIndex % 3) - 1) * 18f, (stackIndex / 3) * 18f);
+            var offset = new Vector2(((stackIndex % 3) - 1) * 18f, (stackIndex / 3) * 18f) * markerScale;
             var markerPosition = new Vector2(province.CapitalPosition.X, province.CapitalPosition.Y) + offset;
             var distanceSquared = markerPosition.DistanceSquaredTo(mapPosition);
             if (distanceSquared <= nearestDistanceSquared)
