@@ -11,6 +11,7 @@ using AOH.Game.Simulation.Economy;
 using AOH.Game.Simulation.Population;
 using AOH.Game.Simulation.Military;
 using AOH.Game.Simulation.AI;
+using System.IO;
 using Godot;
 
 namespace AOH.Game.Presentation;
@@ -24,7 +25,13 @@ public partial class GameBootstrap : Node2D
     private Node? _hud;
     private SimulationEngine? _simulationEngine;
     private ProvincePathfinder? _pathfinder;
+    private GameTime? _gameTime;
+    private GameRandom? _gameRandom;
+    private AiSystem? _aiSystem;
+    private JsonSaveGameRepository? _saveRepository;
     private readonly ArmyRecruitmentService _armyRecruitmentService = new();
+
+    public event Action? ReturnRequested;
 
     [Signal]
     public delegate void WorldReadyEventHandler(Godot.Collections.Dictionary summary);
@@ -48,16 +55,18 @@ public partial class GameBootstrap : Node2D
             var data = new JsonGameDataRepository().Load();
             _world = data.World;
             _pathfinder = new ProvincePathfinder(_world);
-            var gameTime = new GameTime(data.StartDate, data.StartingSpeed);
-            var gameRandom = new GameRandom(data.RandomSeed);
+            _gameTime = new GameTime(data.StartDate, data.StartingSpeed);
+            _gameRandom = new GameRandom(data.RandomSeed);
+            _aiSystem = new AiSystem(_gameTime, _gameRandom);
+            _saveRepository = new JsonSaveGameRepository(Path.Combine(OS.GetUserDataDir(), "saves"));
             _simulationEngine = new SimulationEngine(
                 _world,
-                gameTime,
+                _gameTime,
                 new EconomySystem(),
                 new PopulationSystem(),
                 new ArmyMovementSystem(),
-                new CombatSystem(gameRandom),
-                new AiSystem(gameTime, gameRandom));
+                new CombatSystem(_gameRandom),
+                _aiSystem);
             _provinceMap = new ProvinceMap();
             _provinceMap.Configure(data.World, data.ColorLookup, data.MapData);
             _provinceMap.ProvinceSelectionChanged += HandleProvinceSelected;
@@ -94,6 +103,65 @@ public partial class GameBootstrap : Node2D
         _simulationEngine.Time.SetSpeed((GameSpeed)speed);
         EmitSignal(SignalName.WorldTicked, CreateWorldSummary());
     }
+
+    public Godot.Collections.Dictionary SaveGame(string slotName)
+    {
+        if (_world is null || _gameTime is null || _gameRandom is null || _aiSystem is null || _saveRepository is null)
+        {
+            return CreateCommandResult(false, "Chưa thể lưu vì game chưa khởi tạo xong.");
+        }
+
+        try
+        {
+            _saveRepository.Save(slotName, GameSaveData.Capture(_world, _gameTime, _gameRandom, _aiSystem));
+            return CreateCommandResult(true, $"Đã lưu game tại ô '{slotName}'.");
+        }
+        catch (Exception exception)
+        {
+            GD.PushError($"Lưu game thất bại: {exception.Message}");
+            return CreateCommandResult(false, $"Lưu game thất bại: {exception.Message}");
+        }
+    }
+
+    public Godot.Collections.Dictionary LoadGame(string slotName)
+    {
+        if (_world is null || _gameTime is null || _gameRandom is null || _aiSystem is null ||
+            _simulationEngine is null || _saveRepository is null)
+        {
+            return CreateCommandResult(false, "Chưa thể tải vì game chưa khởi tạo xong.");
+        }
+
+        try
+        {
+            var saveData = _saveRepository.Load(slotName);
+            saveData.Restore(_world, _gameTime, _gameRandom, _aiSystem);
+            _simulationEngine.ResetElapsedTime();
+            _provinceMap?.QueueRedraw();
+            EmitSignal(SignalName.WorldTicked, CreateWorldSummary());
+            return CreateCommandResult(true, $"Đã tải bản lưu '{slotName}'.");
+        }
+        catch (Exception exception)
+        {
+            GD.PushError($"Tải game thất bại: {exception.Message}");
+            return CreateCommandResult(false, $"Tải game thất bại: {exception.Message}");
+        }
+    }
+
+    public bool SaveExists(string slotName)
+    {
+        try
+        {
+            return _saveRepository?.SaveExists(slotName) ?? false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    public void ExitToMenu() => ReturnRequested?.Invoke();
+
+    public Godot.Collections.Dictionary GetGameSummary() => CreateWorldSummary();
 
     public Godot.Collections.Dictionary RecruitArmy(int provinceId, int soldiers)
     {

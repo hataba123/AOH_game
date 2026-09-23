@@ -68,4 +68,11 @@ public sealed class Country
         Treasury -= cost;
         return true;
     }
+
+    internal void RestoreEconomy(double treasury, double income, double expenses)
+    {
+        Treasury = treasury;
+        Income = income;
+        Expenses = expenses;
+    }
 }

@@ -1,3 +1,4 @@
+using System.IO;
 using AOH.Game.Domain.Provinces;
 using AOH.Game.Infrastructure.Persistence;
 using AOH.Game.Map;
@@ -77,7 +78,30 @@ public partial class MapPickingSmokeTest : Node
             var settledProvince = game.GetProvinceDetails(8);
             Assert(settledProvince["controllerCountryId"].AsInt32() == 2, "Peace without enough war score should restore the occupied province.");
 
-            GD.Print("MapPickingSmokeTest passed: map picking, recruitment, war, army movement, AI, occupation, and peace.");
+            var saveSlot = "smoke-" + Guid.NewGuid().ToString("N")[..12];
+            var savePath = Path.Combine(OS.GetUserDataDir(), "saves", saveSlot + ".json");
+            try
+            {
+                var summaryBeforeSave = game.GetGameSummary();
+                var saveResult = game.SaveGame(saveSlot);
+                Assert(saveResult["success"].AsBool(), $"Saving the game failed: {saveResult["message"].AsString()}");
+                game.SetGameSpeed(0);
+                var loadResult = game.LoadGame(saveSlot);
+                Assert(loadResult["success"].AsBool(), $"Loading the game failed: {loadResult["message"].AsString()}");
+                var summaryAfterLoad = game.GetGameSummary();
+                Assert(summaryAfterLoad["date"].AsString() == summaryBeforeSave["date"].AsString(), "Loading should restore the current date.");
+                Assert(summaryAfterLoad["speed"].AsInt32() == summaryBeforeSave["speed"].AsInt32(), "Loading should restore the game speed.");
+                Assert(summaryAfterLoad["playerTreasury"].AsDouble() == summaryBeforeSave["playerTreasury"].AsDouble(), "Loading should restore the player treasury.");
+            }
+            finally
+            {
+                if (File.Exists(savePath))
+                {
+                    File.Delete(savePath);
+                }
+            }
+
+            GD.Print("MapPickingSmokeTest passed: map picking, recruitment, war, army movement, AI, occupation, peace, and save/load.");
             GetTree().Quit(0);
         }
         catch (Exception exception)

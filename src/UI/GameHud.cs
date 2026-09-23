@@ -42,6 +42,9 @@ public partial class GameHud : Control
     private PanelContainer _ledgerModal = null!;
     private VBoxContainer _ledgerListContainer = null!;
     private PanelContainer _placeholderCard = null!;
+    private PanelContainer _toastPanel = null!;
+    private Label _toastLabel = null!;
+    private double _toastRemainingSeconds;
 
     public override void _Ready()
     {
@@ -57,6 +60,12 @@ public partial class GameHud : Control
 
     public override void _Process(double delta)
     {
+        if (_toastRemainingSeconds > 0d)
+        {
+            _toastRemainingSeconds -= delta;
+            _toastPanel.Visible = _toastRemainingSeconds > 0d;
+        }
+
         // Update floating tooltip to follow cursor smoothly
         if (_hoverTooltip.Visible)
         {
@@ -448,6 +457,7 @@ public partial class GameHud : Control
         BuildHoverTooltip();
         BuildLedgerModal();
         BuildNavigationHint();
+        BuildToast();
     }
 
     private void UpdateWorldSummary(Godot.Collections.Dictionary summary)
@@ -551,6 +561,32 @@ public partial class GameHud : Control
             if (_ledgerModal.Visible) PopulateLedger();
         });
         controlsBox.AddChild(ledgerBtn);
+
+        var saveBtn = CreateStyledButton("💾 Lưu", () =>
+        {
+            var result = _session?.SaveGame("autosave");
+            if (result is not null)
+            {
+                ShowToast(result["message"].AsString());
+            }
+        });
+        controlsBox.AddChild(saveBtn);
+
+        var menuBtn = CreateStyledButton("🏠 Menu", () =>
+        {
+            if (_session is null)
+            {
+                return;
+            }
+
+            var result = _session.SaveGame("autosave");
+            ShowToast(result["message"].AsString());
+            if (result["success"].AsBool())
+            {
+                _session.ExitToMenu();
+            }
+        });
+        controlsBox.AddChild(menuBtn);
 
         _speedButtons = new Button[6];
         for (var speed = 0; speed < _speedButtons.Length; speed++)
@@ -937,6 +973,43 @@ public partial class GameHud : Control
         hintPanel.AddChild(label);
 
         AddChild(hintPanel);
+    }
+
+    private void BuildToast()
+    {
+        _toastPanel = new PanelContainer
+        {
+            CustomMinimumSize = new Vector2(320, 42),
+            Visible = false,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        _toastPanel.SetAnchorsPreset(LayoutPreset.BottomWide);
+        _toastPanel.OffsetLeft = 0;
+        _toastPanel.OffsetTop = -66;
+        _toastPanel.OffsetRight = 0;
+        _toastPanel.OffsetBottom = -18;
+        _toastPanel.AddThemeStyleboxOverride("panel", CreateStyleBox(
+            new Color(0.05f, 0.08f, 0.12f, 0.96f),
+            new Color("#c89b3c"),
+            borderWidth: 1,
+            radius: 8,
+            padH: 16,
+            padV: 8));
+        _toastLabel = new Label
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _toastLabel.AddThemeColorOverride("font_color", new Color("#f8fafc"));
+        _toastPanel.AddChild(_toastLabel);
+        AddChild(_toastPanel);
+    }
+
+    private void ShowToast(string message)
+    {
+        _toastLabel.Text = message;
+        _toastPanel.Visible = true;
+        _toastRemainingSeconds = 3d;
     }
 
     // --- Helper Styling Methods ---

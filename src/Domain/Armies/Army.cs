@@ -74,6 +74,11 @@ public sealed class Army
         MovementProgress = 0d;
     }
 
+    internal void RestoreMovementProgress(double progress)
+    {
+        MovementProgress = progress;
+    }
+
     internal void AddMovementProgress(double amount)
     {
         if (amount > 0d && _path.Count > 0)

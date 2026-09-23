@@ -92,4 +92,12 @@ public sealed class Province
         OwnerCountryId = countryId;
         ControllerCountryId = countryId;
     }
+
+    internal void RestoreState(CountryId ownerCountryId, CountryId controllerCountryId, int population, int manpower)
+    {
+        OwnerCountryId = ownerCountryId;
+        ControllerCountryId = controllerCountryId;
+        Population = population;
+        Manpower = manpower;
+    }
 }

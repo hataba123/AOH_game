@@ -54,4 +54,14 @@ public sealed class War
     }
 
     public void Conclude() => IsActive = false;
+
+    internal void RestoreWarScore(double warScore)
+    {
+        if (warScore is < -100d or > 100d || !double.IsFinite(warScore))
+        {
+            throw new ArgumentOutOfRangeException(nameof(warScore));
+        }
+
+        AttackerWarScore = warScore;
+    }
 }

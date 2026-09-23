@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://src/Presentation/GameBootstrap.cs" id="1_bootstrap"]
+[ext_resource type="Script" path="res://src/Presentation/GameLauncher.cs" id="1_launcher"]
 
-[node name="Main" type="Node2D"]
-script = ExtResource("1_bootstrap")
+[node name="Main" type="Control"]
+script = ExtResource("1_launcher")

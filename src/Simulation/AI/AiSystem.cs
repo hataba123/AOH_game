@@ -28,6 +28,18 @@ public sealed class AiSystem : IGameSystem
 
     public IReadOnlyList<AiDecision> LastDecisions => _lastDecisions;
 
+    public int DaysUntilDecision => _daysUntilDecision;
+
+    public void RestoreSchedule(int daysUntilDecision)
+    {
+        if (daysUntilDecision is < 0 or >= DaysBetweenDecisions)
+        {
+            throw new ArgumentOutOfRangeException(nameof(daysUntilDecision));
+        }
+
+        _daysUntilDecision = daysUntilDecision;
+    }
+
     public void Process(GameWorld world)
     {
         _daysUntilDecision++;

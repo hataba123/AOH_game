@@ -14,9 +14,25 @@ public sealed class GameRandom
         }
     }
 
-    public int Seed { get; }
+    public int Seed { get; private set; }
 
     public uint State => _state;
+
+    public void RestoreState(uint state)
+    {
+        if (state == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(state));
+        }
+
+        _state = state;
+    }
+
+    public void RestoreState(int seed, uint state)
+    {
+        RestoreState(state);
+        Seed = seed;
+    }
 
     public double NextDouble()
     {

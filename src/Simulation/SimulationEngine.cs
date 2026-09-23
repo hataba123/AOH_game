@@ -24,6 +24,8 @@ public sealed class SimulationEngine
 
     public GameTime Time { get; }
 
+    public void ResetElapsedTime() => _accumulatedSeconds = 0d;
+
     public int AdvanceFrame(double elapsedSeconds)
     {
         if (elapsedSeconds < 0d)

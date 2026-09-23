@@ -59,6 +59,24 @@ public sealed class GameWorld
         return true;
     }
 
+    public void ClearRuntimeEntities()
+    {
+        _armies.Clear();
+        _wars.Clear();
+    }
+
+    public bool TryAddWar(War war)
+    {
+        if (!war.IsActive || !war.AttackerIds.All(Countries.ContainsKey) || !war.DefenderIds.All(Countries.ContainsKey) ||
+            war.AttackerIds.Any(war.DefenderIds.Contains) ||
+            war.AttackerIds.Any(attacker => war.DefenderIds.Any(defender => IsAtWar(attacker, defender))))
+        {
+            return false;
+        }
+
+        return _wars.TryAdd(war.Id, war);
+    }
+
     public bool IsAtWar(CountryId first, CountryId second) =>
         _wars.Values.Any(war => war.IsActive && war.AreEnemies(first, second));
 

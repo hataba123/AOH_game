@@ -29,6 +29,23 @@ public sealed class GameTime
         Speed = speed;
     }
 
+    public void RestoreState(DateOnly currentDate, GameSpeed speed, long tickCount)
+    {
+        if (!Enum.IsDefined(speed))
+        {
+            throw new ArgumentOutOfRangeException(nameof(speed));
+        }
+
+        if (tickCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(tickCount));
+        }
+
+        CurrentDate = currentDate;
+        Speed = speed;
+        TickCount = tickCount;
+    }
+
     internal void AdvanceOneDay()
     {
         CurrentDate = CurrentDate.AddDays(1);
