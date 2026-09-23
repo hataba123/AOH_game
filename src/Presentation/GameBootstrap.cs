@@ -10,6 +10,7 @@ using AOH.Game.Simulation;
 using AOH.Game.Simulation.Economy;
 using AOH.Game.Simulation.Population;
 using AOH.Game.Simulation.Military;
+using AOH.Game.Simulation.AI;
 using Godot;
 
 namespace AOH.Game.Presentation;
@@ -47,13 +48,16 @@ public partial class GameBootstrap : Node2D
             var data = new JsonGameDataRepository().Load();
             _world = data.World;
             _pathfinder = new ProvincePathfinder(_world);
+            var gameTime = new GameTime(data.StartDate, data.StartingSpeed);
+            var gameRandom = new GameRandom(data.RandomSeed);
             _simulationEngine = new SimulationEngine(
                 _world,
-                new GameTime(data.StartDate, data.StartingSpeed),
+                gameTime,
                 new EconomySystem(),
                 new PopulationSystem(),
                 new ArmyMovementSystem(),
-                new CombatSystem(new GameRandom(data.RandomSeed)));
+                new CombatSystem(gameRandom),
+                new AiSystem(gameTime, gameRandom));
             _provinceMap = new ProvinceMap();
             _provinceMap.Configure(data.World, data.ColorLookup, data.MapData);
             _provinceMap.ProvinceSelectionChanged += HandleProvinceSelected;
@@ -299,6 +303,7 @@ public partial class GameBootstrap : Node2D
                 ["expenses"] = country.Expenses,
                 ["population"] = country.Population,
                 ["manpower"] = country.Manpower,
+                ["armyCount"] = _world.Armies.Values.Count(army => army.OwnerCountryId == country.Id),
                 ["isAtWarWithPlayer"] = hasActiveWar,
                 ["warScore"] = hasActiveWar && playerCountry is not null
                     ? activeWar.AttackerIds.Contains(playerCountry.Id) ? activeWar.AttackerWarScore : -activeWar.AttackerWarScore
@@ -397,6 +402,7 @@ public partial class GameBootstrap : Node2D
             ["countryCount"] = _world?.Countries.Count ?? 0,
             ["armyCount"] = _world?.Armies.Count ?? 0,
             ["warCount"] = _world?.Wars.Values.Count(war => war.IsActive) ?? 0,
+            ["aiCountryCount"] = _world?.Countries.Values.Count(country => country.IsAiControlled) ?? 0,
             ["date"] = _simulationEngine?.Time.CurrentDate.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
             ["speed"] = _simulationEngine is null ? 0 : (int)_simulationEngine.Time.Speed,
             ["tickCount"] = _simulationEngine?.Time.TickCount ?? 0,

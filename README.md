@@ -16,6 +16,8 @@ Mốc quân đội: chọn tỉnh mình kiểm soát để tuyển 1.000 binh s�
 
 Mốc chiến tranh: mở **Vương Triều** để tuyên chiến hoặc ký hòa ước với AI. Đội quân giao chiến khi hai bên gặp nhau; quân thắng có thể chiếm quyền kiểm soát tỉnh nhưng chưa đổi chủ sở hữu. Hòa ước dùng điểm chiến tranh để xử lý tỉnh đang bị chiếm (20 điểm cho mỗi tỉnh nhượng lại); phần còn lại trở về chủ sở hữu ban đầu.
 
+AI đánh giá tình hình mỗi 7 ngày game bằng điểm tiện ích có nhiễu ngẫu nhiên nhỏ, tái lập được từ `randomSeed` trong `Data/game_settings.json`. AI có thể tuyển quân, tuyên chiến với láng giềng, bảo vệ tỉnh bị chiếm hoặc đưa quân tấn công.
+
 ## Cấu trúc
 
 - `src/Domain`: province, country, graph và kiểm tra dữ liệu, không phụ thuộc node Godot.
@@ -24,6 +26,7 @@ Mốc chiến tranh: mở **Vương Triều** để tuyên chiến hoặc ký h�
 - `src/Presentation`: bootstrap scene và API đọc dữ liệu cho HUD.
 - `src/Core` và `src/Simulation`: thời gian game, tốc độ, kinh tế và dân số.
 - `src/Domain/Armies`, `src/Domain/Diplomacy`, `src/Map/ProvincePathfinder.cs` và `src/Simulation/Military`: đội quân, chiến tranh, A*, tuyển quân, giao tranh và chiếm đóng.
+- `src/Simulation/AI`: chấm điểm hành động kinh tế/quân sự và ra quyết định theo chu kỳ 7 ngày.
 - `Data`: dữ liệu giả tưởng cho 20 tỉnh, 4 quốc gia và đồ thị kết nối.
 - `assets/maps/province_id_map.png`: màu RGB mã hóa province ID; biển dùng màu `#152F37`.
 
@@ -45,6 +48,6 @@ HUD sẽ được nạp tự động từ `Scenes/UI/GameHud.tscn`. Xem [hợp �
 2. Phase 2 — Ngày trong game, tốc độ, kinh tế và tăng trưởng dân số (đã triển khai).
 3. Phase 3 — Quân đội, tuyển quân, tìm đường và di chuyển (đã triển khai).
 4. Phase 4 — Chiến tranh, giao tranh, chiếm đóng và hòa ước (đã triển khai).
-5. Phase 5 — AI kinh tế và quân sự.
+5. Phase 5 — AI kinh tế và quân sự (đã triển khai).
 6. Phase 6 — Save/load và menu.
 7. Phase 7 — Đo hiệu năng và kiểm tra thế giới lớn.

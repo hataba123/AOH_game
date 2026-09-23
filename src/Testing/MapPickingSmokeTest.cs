@@ -63,19 +63,21 @@ public partial class MapPickingSmokeTest : Node
             var movement = game.MoveArmy(armyId, 8);
             Assert(movement["success"].AsBool(), $"Army movement order failed: {movement["message"].AsString()}");
             game.SetGameSpeed(5);
-            game._Process(1d);
+            game._Process(1.4d);
 
             var army = game.GetArmyDetails(armyId);
             Assert(army["currentProvinceId"].AsInt32() == 8, "The army should complete movement to the enemy province.");
             var occupiedProvince = game.GetProvinceDetails(8);
             Assert(occupiedProvince["ownerCountryId"].AsInt32() == 2, "Occupation should not immediately change province ownership.");
             Assert(occupiedProvince["controllerCountryId"].AsInt32() == 1, "A victorious army should control the occupied province.");
+            var enemySummary = game.GetCountrySummaries().Single(country => country["countryId"].AsInt32() == 2);
+            Assert(enemySummary["armyCount"].AsInt32() > 0, "AI should recruit an army during its seven-day decision cycle.");
             var peace = game.ConcludePeace(2);
             Assert(peace["success"].AsBool(), "The player should be able to conclude peace with the enemy.");
             var settledProvince = game.GetProvinceDetails(8);
             Assert(settledProvince["controllerCountryId"].AsInt32() == 2, "Peace without enough war score should restore the occupied province.");
 
-            GD.Print("MapPickingSmokeTest passed: map picking, recruitment, war, army movement, occupation, and peace.");
+            GD.Print("MapPickingSmokeTest passed: map picking, recruitment, war, army movement, AI, occupation, and peace.");
             GetTree().Quit(0);
         }
         catch (Exception exception)
