@@ -20,7 +20,7 @@ public sealed class ArmyMovementSystem : IGameSystem
             {
                 var nextProvinceId = army.Path[0];
                 if (!world.TryGetProvince(nextProvinceId, out var nextProvince) ||
-                    nextProvince.ControllerCountryId != army.OwnerCountryId ||
+                    !CanEnterProvince(world, army.OwnerCountryId, nextProvince) ||
                     !world.ProvinceGraph.AreNeighbors(army.CurrentProvinceId, nextProvinceId))
                 {
                     army.CancelMovement();
@@ -40,4 +40,9 @@ public sealed class ArmyMovementSystem : IGameSystem
             }
         }
     }
+
+    private static bool CanEnterProvince(GameWorld world, AOH.Game.Domain.Countries.CountryId countryId, AOH.Game.Domain.Provinces.Province province) =>
+        province.ControllerCountryId == countryId ||
+        world.IsAtWar(countryId, province.ControllerCountryId) ||
+        world.IsAtWar(countryId, province.OwnerCountryId);
 }

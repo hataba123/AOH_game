@@ -56,15 +56,26 @@ public partial class MapPickingSmokeTest : Node
             var recruitment = game.RecruitArmy(7, 1_000);
             Assert(recruitment["success"].AsBool(), $"Army recruitment failed: {recruitment["message"].AsString()}");
             var armyId = recruitment["armyId"].AsInt32();
-            var movement = game.MoveArmy(armyId, 6);
+            var blockedMovement = game.MoveArmy(armyId, 8);
+            Assert(!blockedMovement["success"].AsBool(), "The army should not enter another country before war is declared.");
+            var declaration = game.DeclareWar(2);
+            Assert(declaration["success"].AsBool(), $"War declaration failed: {declaration["message"].AsString()}");
+            var movement = game.MoveArmy(armyId, 8);
             Assert(movement["success"].AsBool(), $"Army movement order failed: {movement["message"].AsString()}");
             game.SetGameSpeed(5);
             game._Process(1d);
 
             var army = game.GetArmyDetails(armyId);
-            Assert(army["currentProvinceId"].AsInt32() == 6, "The army should complete movement to the neighboring province.");
+            Assert(army["currentProvinceId"].AsInt32() == 8, "The army should complete movement to the enemy province.");
+            var occupiedProvince = game.GetProvinceDetails(8);
+            Assert(occupiedProvince["ownerCountryId"].AsInt32() == 2, "Occupation should not immediately change province ownership.");
+            Assert(occupiedProvince["controllerCountryId"].AsInt32() == 1, "A victorious army should control the occupied province.");
+            var peace = game.ConcludePeace(2);
+            Assert(peace["success"].AsBool(), "The player should be able to conclude peace with the enemy.");
+            var settledProvince = game.GetProvinceDetails(8);
+            Assert(settledProvince["controllerCountryId"].AsInt32() == 2, "Peace without enough war score should restore the occupied province.");
 
-            GD.Print("MapPickingSmokeTest passed: map picking, path-based recruitment, and army movement.");
+            GD.Print("MapPickingSmokeTest passed: map picking, recruitment, war, army movement, occupation, and peace.");
             GetTree().Quit(0);
         }
         catch (Exception exception)

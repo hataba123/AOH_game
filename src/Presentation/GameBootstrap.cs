@@ -1,6 +1,7 @@
 using AOH.Game.Domain;
 using AOH.Game.Domain.Armies;
 using AOH.Game.Domain.Countries;
+using AOH.Game.Domain.Diplomacy;
 using AOH.Game.Domain.Provinces;
 using AOH.Game.Infrastructure.Persistence;
 using AOH.Game.Map;
@@ -51,7 +52,8 @@ public partial class GameBootstrap : Node2D
                 new GameTime(data.StartDate, data.StartingSpeed),
                 new EconomySystem(),
                 new PopulationSystem(),
-                new ArmyMovementSystem());
+                new ArmyMovementSystem(),
+                new CombatSystem(new GameRandom(data.RandomSeed)));
             _provinceMap = new ProvinceMap();
             _provinceMap.Configure(data.World, data.ColorLookup, data.MapData);
             _provinceMap.ProvinceSelectionChanged += HandleProvinceSelected;
@@ -146,6 +148,52 @@ public partial class GameBootstrap : Node2D
         return CreateCommandResult(true, $"Đã phát lệnh di chuyển qua {path.Count - 1} tỉnh.");
     }
 
+    public Godot.Collections.Dictionary DeclareWar(int targetCountryId)
+    {
+        if (_world is null || _simulationEngine is null || !_world.TryGetCountry(new CountryId(targetCountryId), out var target))
+        {
+            return CreateCommandResult(false, "Không tìm thấy quốc gia mục tiêu.");
+        }
+
+        var player = _world.Countries.Values.FirstOrDefault(country => !country.IsAiControlled);
+        if (player is null || player.Id == target.Id || !target.IsAiControlled)
+        {
+            return CreateCommandResult(false, "Không thể tuyên chiến với quốc gia này.");
+        }
+
+        if (!_world.TryDeclareWar(player.Id, target.Id, _simulationEngine.Time.CurrentDate, out var war) || war is null)
+        {
+            return CreateCommandResult(false, "Hai quốc gia đã có chiến tranh hoặc dữ liệu không hợp lệ.");
+        }
+
+        EmitSignal(SignalName.WorldTicked, CreateWorldSummary());
+        return CreateCommandResult(true, $"Đã tuyên chiến với {target.Name}.");
+    }
+
+    public Godot.Collections.Dictionary ConcludePeace(int targetCountryId)
+    {
+        if (_world is null)
+        {
+            return CreateCommandResult(false, "Thế giới chưa được tải.");
+        }
+
+        var player = _world.Countries.Values.FirstOrDefault(country => !country.IsAiControlled);
+        var targetId = new CountryId(targetCountryId);
+        if (player is null || !_world.TryGetActiveWar(player.Id, targetId, out var war))
+        {
+            return CreateCommandResult(false, "Không có chiến tranh đang diễn ra với quốc gia này.");
+        }
+
+        if (!_world.TryConcludePeace(war.Id, player.Id))
+        {
+            return CreateCommandResult(false, "Không thể ký hòa ước.");
+        }
+
+        _provinceMap?.QueueRedraw();
+        EmitSignal(SignalName.WorldTicked, CreateWorldSummary());
+        return CreateCommandResult(true, "Hòa ước đã được ký; các tỉnh bị chiếm đã được giải quyết theo điểm chiến tranh.");
+    }
+
     public Godot.Collections.Dictionary GetArmyDetails(int armyId)
     {
         if (_world is null || !_world.Armies.TryGetValue(new ArmyId(armyId), out var army) ||
@@ -232,8 +280,12 @@ public partial class GameBootstrap : Node2D
             return result;
         }
 
+        var playerCountry = _world.Countries.Values.FirstOrDefault(candidate => !candidate.IsAiControlled);
         foreach (var country in _world.Countries.Values.OrderBy(country => country.Id.Value))
         {
+            War activeWar = null!;
+            var hasActiveWar = playerCountry is not null &&
+                _world.TryGetActiveWar(playerCountry.Id, country.Id, out activeWar);
             result.Add(new Godot.Collections.Dictionary
             {
                 ["countryId"] = country.Id.Value,
@@ -246,7 +298,12 @@ public partial class GameBootstrap : Node2D
                 ["income"] = country.Income,
                 ["expenses"] = country.Expenses,
                 ["population"] = country.Population,
-                ["manpower"] = country.Manpower
+                ["manpower"] = country.Manpower,
+                ["isAtWarWithPlayer"] = hasActiveWar,
+                ["warScore"] = hasActiveWar && playerCountry is not null
+                    ? activeWar.AttackerIds.Contains(playerCountry.Id) ? activeWar.AttackerWarScore : -activeWar.AttackerWarScore
+                    : 0d,
+                ["warStartDate"] = hasActiveWar ? activeWar.StartDate.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture) : string.Empty
             });
         }
 
@@ -339,6 +396,7 @@ public partial class GameBootstrap : Node2D
             ["provinceCount"] = _world?.Provinces.Count ?? 0,
             ["countryCount"] = _world?.Countries.Count ?? 0,
             ["armyCount"] = _world?.Armies.Count ?? 0,
+            ["warCount"] = _world?.Wars.Values.Count(war => war.IsActive) ?? 0,
             ["date"] = _simulationEngine?.Time.CurrentDate.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
             ["speed"] = _simulationEngine is null ? 0 : (int)_simulationEngine.Time.Speed,
             ["tickCount"] = _simulationEngine?.Time.TickCount ?? 0,

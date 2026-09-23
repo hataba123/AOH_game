@@ -19,8 +19,8 @@ public sealed class ProvincePathfinder
     {
         if (!_world.TryGetProvince(start, out var startProvince) ||
             !_world.TryGetProvince(target, out var targetProvince) ||
-            startProvince.ControllerCountryId != countryId ||
-            targetProvince.ControllerCountryId != countryId)
+            !CanTraverse(startProvince, countryId) ||
+            !CanTraverse(targetProvince, countryId))
         {
             return Array.Empty<ProvinceId>();
         }
@@ -50,7 +50,7 @@ public sealed class ProvincePathfinder
 
             foreach (var neighborId in _world.ProvinceGraph.GetNeighbors(current))
             {
-                if (!_world.TryGetProvince(neighborId, out var neighbor) || neighbor.ControllerCountryId != countryId)
+                if (!_world.TryGetProvince(neighborId, out var neighbor) || !CanTraverse(neighbor, countryId))
                 {
                     continue;
                 }
@@ -79,6 +79,11 @@ public sealed class ProvincePathfinder
         ProvinceTerrain.Highlands => 1.75d,
         _ => 1d
     };
+
+    private bool CanTraverse(Province province, CountryId countryId) =>
+        province.ControllerCountryId == countryId ||
+        _world.IsAtWar(countryId, province.ControllerCountryId) ||
+        _world.IsAtWar(countryId, province.OwnerCountryId);
 
     private double Heuristic(ProvinceId currentId, ProvinceId targetId)
     {

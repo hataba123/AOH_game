@@ -38,9 +38,9 @@ public sealed class Province
 
     public string Name { get; }
 
-    public CountryId OwnerCountryId { get; }
+    public CountryId OwnerCountryId { get; private set; }
 
-    public CountryId ControllerCountryId { get; }
+    public CountryId ControllerCountryId { get; private set; }
 
     public int Population { get; private set; }
 
@@ -83,5 +83,13 @@ public sealed class Province
 
         Manpower -= soldiers;
         return true;
+    }
+
+    internal void SetController(CountryId countryId) => ControllerCountryId = countryId;
+
+    internal void TransferOwnership(CountryId countryId)
+    {
+        OwnerCountryId = countryId;
+        ControllerCountryId = countryId;
     }
 }

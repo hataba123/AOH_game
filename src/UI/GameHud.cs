@@ -344,8 +344,11 @@ public partial class GameHud : Control
         {
             string name = country["name"].AsString();
             string colorHex = country["mapColor"].AsString();
+            int countryId = country["countryId"].AsInt32();
             int provCount = country["provinceCount"].AsInt32();
             bool isAi = country["isAiControlled"].AsBool();
+            bool isAtWar = country["isAtWarWithPlayer"].AsBool();
+            double warScore = country["warScore"].AsDouble();
             double treasury = country["treasury"].AsDouble();
             double income = country["income"].AsDouble();
 
@@ -402,6 +405,34 @@ public partial class GameHud : Control
             aiBadge.AddThemeFontSizeOverride("font_size", 13);
             hBox.AddChild(aiBadge);
 
+            var relationLabel = new Label
+            {
+                Text = isAtWar ? $"Chiến tranh ({warScore:+0;-0;0})" : "Hòa bình",
+                CustomMinimumSize = new Vector2(115, 0),
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            relationLabel.AddThemeColorOverride("font_color", isAtWar ? new Color("#fb7185") : new Color("#94a3b8"));
+            relationLabel.AddThemeFontSizeOverride("font_size", 12);
+            hBox.AddChild(relationLabel);
+
+            if (isAi)
+            {
+                var diplomacyButton = CreateStyledButton(isAtWar ? "Hòa ước" : "Tuyên chiến", () =>
+                {
+                    if (_session is null)
+                    {
+                        return;
+                    }
+
+                    var result = isAtWar ? _session.ConcludePeace(countryId) : _session.DeclareWar(countryId);
+                    if (!result["success"].AsBool())
+                    {
+                        relationLabel.Text = result["message"].AsString();
+                    }
+                }, new Vector2(100, 34), isActive: isAtWar);
+                hBox.AddChild(diplomacyButton);
+            }
+
             row.AddChild(hBox);
             _ledgerListContainer.AddChild(row);
         }
@@ -424,13 +455,14 @@ public partial class GameHud : Control
         int provinceCount = summary.ContainsKey("provinceCount") ? summary["provinceCount"].AsInt32() : 0;
         int countryCount = summary.ContainsKey("countryCount") ? summary["countryCount"].AsInt32() : 0;
         int armyCount = summary.ContainsKey("armyCount") ? summary["armyCount"].AsInt32() : 0;
+        int warCount = summary.ContainsKey("warCount") ? summary["warCount"].AsInt32() : 0;
         string date = summary.ContainsKey("date") ? summary["date"].AsString() : string.Empty;
         double treasury = summary.ContainsKey("playerTreasury") ? summary["playerTreasury"].AsDouble() : 0d;
         double income = summary.ContainsKey("playerIncome") ? summary["playerIncome"].AsDouble() : 0d;
         int speed = summary.ContainsKey("speed") ? summary["speed"].AsInt32() : 0;
 
         _dateLabel.Text = string.IsNullOrEmpty(date) ? "Ngày chưa xác định" : $"Ngày {date}";
-        _worldStatsLabel.Text = $"🗺️ {provinceCount} Tỉnh   │   👑 {countryCount} Vương Triều   │   ⚔️ {armyCount} Quân   │   💰 {treasury.ToString("N0", CultureInfo.InvariantCulture)} (+{income.ToString("N0", CultureInfo.InvariantCulture)}/ngày)";
+        _worldStatsLabel.Text = $"🗺️ {provinceCount} Tỉnh   │   👑 {countryCount} Vương Triều   │   ⚔️ {armyCount} Quân   │   🛡️ {warCount} Chiến tranh   │   💰 {treasury.ToString("N0", CultureInfo.InvariantCulture)} (+{income.ToString("N0", CultureInfo.InvariantCulture)}/ngày)";
         UpdateSpeedButtons(speed);
     }
 
@@ -823,15 +855,15 @@ public partial class GameHud : Control
     {
         _ledgerModal = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(580, 360),
+            CustomMinimumSize = new Vector2(850, 440),
             MouseFilter = MouseFilterEnum.Stop,
             Visible = false
         };
         _ledgerModal.SetAnchorsPreset(LayoutPreset.Center);
-        _ledgerModal.OffsetLeft = -290;
-        _ledgerModal.OffsetTop = -180;
-        _ledgerModal.OffsetRight = 290;
-        _ledgerModal.OffsetBottom = 180;
+        _ledgerModal.OffsetLeft = -425;
+        _ledgerModal.OffsetTop = -220;
+        _ledgerModal.OffsetRight = 425;
+        _ledgerModal.OffsetBottom = 220;
 
         var modalStyle = CreateStyleBox(
             bgColor: new Color(0.05f, 0.08f, 0.13f, 0.98f),

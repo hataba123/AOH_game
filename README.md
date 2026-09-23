@@ -12,7 +12,9 @@ Thao tác trên bản đồ: nhấp trái để chọn tỉnh, lăn chuột đ�
 
 Mốc mô phỏng hiện có ngày bắt đầu 01/01/1444, nút tạm dừng và tốc độ 1–5 ngày mỗi giây. Thuế tỉnh được cộng vào ngân khố quốc gia mỗi ngày; dân số tăng theo mức 0,6% mỗi năm và nhân lực được cập nhật theo dân số.
 
-Mốc quân đội: chọn tỉnh mình kiểm soát để tuyển 1.000 binh sĩ (chi phí 500 ngân khố). Nhấp vào dấu quân trên bản đồ để chọn đội quân, chọn tỉnh đích rồi nhấn **Điều quân tới tỉnh đang chọn**. Quân chỉ đi qua tỉnh do quốc gia mình kiểm soát; địa hình làm thay đổi số ngày di chuyển.
+Mốc quân đội: chọn tỉnh mình kiểm soát để tuyển 1.000 binh sĩ (chi phí 500 ngân khố). Nhấp vào dấu quân trên bản đồ để chọn đội quân, chọn tỉnh đích rồi nhấn **Điều quân tới tỉnh đang chọn**. Quân chỉ đi qua tỉnh do quốc gia mình kiểm soát hoặc lãnh thổ của đối thủ đang có chiến tranh; địa hình làm thay đổi số ngày di chuyển.
+
+Mốc chiến tranh: mở **Vương Triều** để tuyên chiến hoặc ký hòa ước với AI. Đội quân giao chiến khi hai bên gặp nhau; quân thắng có thể chiếm quyền kiểm soát tỉnh nhưng chưa đổi chủ sở hữu. Hòa ước dùng điểm chiến tranh để xử lý tỉnh đang bị chiếm (20 điểm cho mỗi tỉnh nhượng lại); phần còn lại trở về chủ sở hữu ban đầu.
 
 ## Cấu trúc
 
@@ -21,7 +23,7 @@ Mốc quân đội: chọn tỉnh mình kiểm soát để tuyển 1.000 binh s�
 - `src/Infrastructure/Persistence`: nạp JSON và PNG.
 - `src/Presentation`: bootstrap scene và API đọc dữ liệu cho HUD.
 - `src/Core` và `src/Simulation`: thời gian game, tốc độ, kinh tế và dân số.
-- `src/Domain/Armies`, `src/Map/ProvincePathfinder.cs` và `src/Simulation/Military`: đội quân, tìm đường A*, tuyển quân và di chuyển theo tick.
+- `src/Domain/Armies`, `src/Domain/Diplomacy`, `src/Map/ProvincePathfinder.cs` và `src/Simulation/Military`: đội quân, chiến tranh, A*, tuyển quân, giao tranh và chiếm đóng.
 - `Data`: dữ liệu giả tưởng cho 20 tỉnh, 4 quốc gia và đồ thị kết nối.
 - `assets/maps/province_id_map.png`: màu RGB mã hóa province ID; biển dùng màu `#152F37`.
 
@@ -42,7 +44,7 @@ HUD sẽ được nạp tự động từ `Scenes/UI/GameHud.tscn`. Xem [hợp �
 1. Phase 1 — Bản đồ, province/country, graph, picking, hover, đọc JSON và kiểm tra dữ liệu.
 2. Phase 2 — Ngày trong game, tốc độ, kinh tế và tăng trưởng dân số (đã triển khai).
 3. Phase 3 — Quân đội, tuyển quân, tìm đường và di chuyển (đã triển khai).
-4. Phase 4 — Chiến tranh, giao tranh, chiếm đóng và hòa ước.
+4. Phase 4 — Chiến tranh, giao tranh, chiếm đóng và hòa ước (đã triển khai).
 5. Phase 5 — AI kinh tế và quân sự.
 6. Phase 6 — Save/load và menu.
 7. Phase 7 — Đo hiệu năng và kiểm tra thế giới lớn.

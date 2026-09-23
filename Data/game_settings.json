@@ -1,4 +1,5 @@
 {
   "startDate": "1444-01-01",
-  "startingSpeed": 1
+  "startingSpeed": 1,
+  "randomSeed": 1444
 }

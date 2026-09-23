@@ -51,7 +51,13 @@ public sealed class JsonGameDataRepository
             throw new InvalidDataException("Dữ liệu thế giới không hợp lệ:\n- " + string.Join("\n- ", errors));
         }
 
-        return new GameDataLoadResult(new GameWorld(countries, provinces, graph), colorLookup, mapData, startDate, (GameSpeed)settingsData.StartingSpeed);
+        return new GameDataLoadResult(
+            new GameWorld(countries, provinces, graph),
+            colorLookup,
+            mapData,
+            startDate,
+            (GameSpeed)settingsData.StartingSpeed,
+            settingsData.RandomSeed);
     }
 
     private static JsonSerializerOptions CreateJsonOptions()
@@ -177,6 +183,8 @@ public sealed class JsonGameDataRepository
         public string StartDate { get; init; } = string.Empty;
 
         public int StartingSpeed { get; init; } = 1;
+
+        public int RandomSeed { get; init; } = 1444;
     }
 
     private sealed class ProvinceData
@@ -218,13 +226,15 @@ public sealed class GameDataLoadResult
         ProvinceColorLookup colorLookup,
         ProvinceMapData mapData,
         DateOnly startDate,
-        GameSpeed startingSpeed)
+        GameSpeed startingSpeed,
+        int randomSeed)
     {
         World = world;
         ColorLookup = colorLookup;
         MapData = mapData;
         StartDate = startDate;
         StartingSpeed = startingSpeed;
+        RandomSeed = randomSeed;
     }
 
     public GameWorld World { get; }
@@ -236,4 +246,6 @@ public sealed class GameDataLoadResult
     public DateOnly StartDate { get; }
 
     public GameSpeed StartingSpeed { get; }
+
+    public int RandomSeed { get; }
 }

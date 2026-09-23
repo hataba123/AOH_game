@@ -100,4 +100,18 @@ public sealed class Army
 
         return true;
     }
+
+    internal int ApplyCasualties(double lossRatio)
+    {
+        if (Soldiers <= 0 || lossRatio <= 0d)
+        {
+            return 0;
+        }
+
+        var casualties = Math.Clamp((int)Math.Ceiling(Soldiers * lossRatio), 1, Soldiers);
+        Soldiers -= casualties;
+        Morale = Math.Clamp(Morale - 0.02d, 0.1d, 1d);
+        Organization = Math.Clamp(Organization - 0.04d, 0.1d, 1d);
+        return casualties;
+    }
 }

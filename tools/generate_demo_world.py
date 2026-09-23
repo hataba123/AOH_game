@@ -50,7 +50,7 @@ COUNTRIES = [
     {"countryId": 4, "name": "Tùng Hải", "mapColor": "#C3A451", "isAiControlled": True, "capitalProvinceId": 18, "treasury": 5500},
 ]
 
-GAME_SETTINGS = {"startDate": "1444-01-01", "startingSpeed": 1}
+GAME_SETTINGS = {"startDate": "1444-01-01", "startingSpeed": 1, "randomSeed": 1444}
 
 
 def clip_half_plane(polygon, nx, ny, limit):
