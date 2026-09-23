@@ -1,6 +1,7 @@
 using AOH.Game.Domain.Provinces;
 using AOH.Game.Infrastructure.Persistence;
 using AOH.Game.Map;
+using AOH.Game.Presentation;
 using Godot;
 
 namespace AOH.Game.Tests;
@@ -48,7 +49,22 @@ public partial class MapPickingSmokeTest : Node
             Assert(camera.Position != previousPosition, "Dragging with the right mouse button should pan the map.");
             VerifyEveryProvinceCanBePicked(map, data);
 
-            GD.Print("MapPickingSmokeTest passed: 20 provinces, province graph, color lookup, camera zoom, pan, and picking.");
+            var game = new GameBootstrap();
+            AddChild(game);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
+            var recruitment = game.RecruitArmy(7, 1_000);
+            Assert(recruitment["success"].AsBool(), $"Army recruitment failed: {recruitment["message"].AsString()}");
+            var armyId = recruitment["armyId"].AsInt32();
+            var movement = game.MoveArmy(armyId, 6);
+            Assert(movement["success"].AsBool(), $"Army movement order failed: {movement["message"].AsString()}");
+            game.SetGameSpeed(5);
+            game._Process(1d);
+
+            var army = game.GetArmyDetails(armyId);
+            Assert(army["currentProvinceId"].AsInt32() == 6, "The army should complete movement to the neighboring province.");
+
+            GD.Print("MapPickingSmokeTest passed: map picking, path-based recruitment, and army movement.");
             GetTree().Quit(0);
         }
         catch (Exception exception)

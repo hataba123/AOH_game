@@ -1,4 +1,5 @@
 using AOH.Game.Domain;
+using AOH.Game.Domain.Armies;
 using AOH.Game.Domain.Provinces;
 using AOH.Game.Infrastructure.Persistence;
 using Godot;
@@ -25,11 +26,14 @@ public partial class ProvinceMap : Node2D
     private ProvinceMapData? _mapData;
     private ProvinceId? _selectedProvinceId;
     private ProvinceId? _hoveredProvinceId;
+    private ArmyId? _selectedArmyId;
     private bool _isPanning;
 
     public event Action<ProvinceId?>? ProvinceSelectionChanged;
 
     public event Action<ProvinceId?>? ProvinceHoverChanged;
+
+    public event Action<ArmyId?>? ArmySelectionChanged;
 
     public ProvinceMap()
     {
@@ -49,11 +53,20 @@ public partial class ProvinceMap : Node2D
     [Signal]
     public delegate void ProvinceHoveredEventHandler(int provinceId);
 
+    [Signal]
+    public delegate void ArmySelectedEventHandler(int armyId);
+
     public void Configure(GameWorld world, ProvinceColorLookup colorLookup, ProvinceMapData mapData)
     {
         _world = world;
         _colorLookup = colorLookup;
         _mapData = mapData;
+        QueueRedraw();
+    }
+
+    public void SelectArmy(ArmyId armyId)
+    {
+        _selectedArmyId = armyId;
         QueueRedraw();
     }
 
@@ -89,6 +102,8 @@ public partial class ProvinceMap : Node2D
         {
             DrawProvinceHighlight(_hoveredProvinceId, HoverColor, 2.5f, 0.14f);
         }
+
+        DrawArmies();
     }
 
     public override void _UnhandledInput(InputEvent inputEvent)
@@ -174,6 +189,12 @@ public partial class ProvinceMap : Node2D
         }
 
         var mapPosition = GetMapPosition(mouseButton.Position);
+        if (TrySelectArmyAt(mapPosition))
+        {
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
         if (_mapData is not null && _colorLookup is not null &&
             _mapData.TryGetProvinceId(Mathf.FloorToInt(mapPosition.X), Mathf.FloorToInt(mapPosition.Y), _colorLookup, out var provinceId))
         {
@@ -321,6 +342,80 @@ public partial class ProvinceMap : Node2D
             DrawString(font, position + new Vector2(0f, 27f), province.Name, HorizontalAlignment.Center, -1f, 17, new Color(0.08f, 0.13f, 0.14f, 0.8f));
             DrawString(font, position + new Vector2(0f, 25f), province.Name, HorizontalAlignment.Center, -1f, 17, new Color("#F2E9D4"));
         }
+    }
+
+    private void DrawArmies()
+    {
+        if (_world is null)
+        {
+            return;
+        }
+
+        var stackCounts = new Dictionary<ProvinceId, int>();
+        foreach (var army in _world.Armies.Values.OrderBy(army => army.Id.Value))
+        {
+            if (!_world.TryGetProvince(army.CurrentProvinceId, out var province))
+            {
+                continue;
+            }
+
+            stackCounts.TryGetValue(province.Id, out var stackIndex);
+            stackCounts[province.Id] = stackIndex + 1;
+            var offset = new Vector2(((stackIndex % 3) - 1) * 18f, (stackIndex / 3) * 18f);
+            var position = new Vector2(province.CapitalPosition.X, province.CapitalPosition.Y) + offset;
+            var countryColor = Color.FromHtml(_world.Countries[army.OwnerCountryId].MapColor);
+
+            if (_selectedArmyId == army.Id)
+            {
+                DrawCircle(position, 15f, new Color("#ffd166"));
+            }
+
+            DrawCircle(position, 12f, new Color("#101820"));
+            DrawCircle(position, 9f, countryColor);
+            DrawArc(position, 9f, 0f, Mathf.Tau, 24, new Color("#f8fafc"), 1.5f, true);
+            DrawString(ThemeDB.FallbackFont, position + new Vector2(15f, 5f), army.Soldiers.ToString("N0", System.Globalization.CultureInfo.InvariantCulture), HorizontalAlignment.Left, -1f, 14, new Color("#f8fafc"));
+        }
+    }
+
+    private bool TrySelectArmyAt(Vector2 mapPosition)
+    {
+        if (_world is null)
+        {
+            return false;
+        }
+
+        ArmyId? nearestArmyId = null;
+        var nearestDistanceSquared = 20f * 20f;
+        var stackCounts = new Dictionary<ProvinceId, int>();
+        foreach (var army in _world.Armies.Values.OrderBy(army => army.Id.Value))
+        {
+            if (!_world.TryGetProvince(army.CurrentProvinceId, out var province))
+            {
+                continue;
+            }
+
+            stackCounts.TryGetValue(province.Id, out var stackIndex);
+            stackCounts[province.Id] = stackIndex + 1;
+            var offset = new Vector2(((stackIndex % 3) - 1) * 18f, (stackIndex / 3) * 18f);
+            var markerPosition = new Vector2(province.CapitalPosition.X, province.CapitalPosition.Y) + offset;
+            var distanceSquared = markerPosition.DistanceSquaredTo(mapPosition);
+            if (distanceSquared <= nearestDistanceSquared)
+            {
+                nearestDistanceSquared = distanceSquared;
+                nearestArmyId = army.Id;
+            }
+        }
+
+        if (nearestArmyId is not { } selectedArmyId)
+        {
+            return false;
+        }
+
+        _selectedArmyId = selectedArmyId;
+        EmitSignal(SignalName.ArmySelected, selectedArmyId.Value);
+        ArmySelectionChanged?.Invoke(selectedArmyId);
+        QueueRedraw();
+        return true;
     }
 
     private void DrawProvinceHighlight(ProvinceId? provinceId, Color color, float width, float alpha)

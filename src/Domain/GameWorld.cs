@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using AOH.Game.Domain.Armies;
 using AOH.Game.Domain.Countries;
 using AOH.Game.Domain.Provinces;
 
@@ -6,6 +7,8 @@ namespace AOH.Game.Domain;
 
 public sealed class GameWorld
 {
+    private readonly Dictionary<ArmyId, Army> _armies = [];
+
     public GameWorld(
         IEnumerable<Country> countries,
         IEnumerable<Province> provinces,
@@ -22,6 +25,18 @@ public sealed class GameWorld
     public IReadOnlyDictionary<ProvinceId, Province> Provinces { get; }
 
     public ProvinceGraph ProvinceGraph { get; }
+
+    public IReadOnlyDictionary<ArmyId, Army> Armies => _armies;
+
+    public bool TryAddArmy(Army army)
+    {
+        if (!Countries.ContainsKey(army.OwnerCountryId) || !Provinces.ContainsKey(army.CurrentProvinceId))
+        {
+            return false;
+        }
+
+        return _armies.TryAdd(army.Id, army);
+    }
 
     public void RecalculateDemographics()
     {

@@ -11,6 +11,7 @@ public partial class GameHud : Control
     private GameBootstrap? _session;
     private int _selectedProvinceId = -1;
     private int _hoveredProvinceId = -1;
+    private int _selectedArmyId = -1;
 
     // UI Nodes
     private PanelContainer _topBar = null!;
@@ -30,7 +31,9 @@ public partial class GameHud : Control
     private Label _developmentValue = null!;
     private Label _manpowerValue = null!;
     private Container _actionsContainer = null!;
+    private Container _armyListContainer = null!;
     private Container _neighborsContainer = null!;
+    private Label _armyStatusLabel = null!;
     private PanelContainer _hoverTooltip = null!;
     private Label _tooltipName = null!;
     private Label _tooltipOwner = null!;
@@ -104,6 +107,8 @@ public partial class GameHud : Control
         {
             PopulateLedger();
         }
+
+        UpdateArmyStatus();
     }
 
     public void OnProvinceSelected(int provinceId)
@@ -116,6 +121,25 @@ public partial class GameHud : Control
     {
         _hoveredProvinceId = provinceId;
         UpdateHoverTooltip(provinceId);
+    }
+
+    public void OnArmySelected(int armyId)
+    {
+        if (armyId <= 0 || _session is null)
+        {
+            return;
+        }
+
+        var army = _session.GetArmyDetails(armyId);
+        if (army.Count == 0 || !army["isPlayerArmy"].AsBool())
+        {
+            return;
+        }
+
+        _selectedArmyId = armyId;
+        _selectedProvinceId = army["currentProvinceId"].AsInt32();
+        UpdateProvinceDisplay(_selectedProvinceId);
+        UpdateArmyStatus();
     }
 
     // --- UI State Updates ---
@@ -181,6 +205,7 @@ public partial class GameHud : Control
 
         // Update neighbors
         UpdateNeighborsList(provinceId);
+        UpdateArmyList(provinceId);
     }
 
     private void UpdateNeighborsList(int provinceId)
@@ -211,6 +236,64 @@ public partial class GameHud : Control
         hintLabel.AddThemeColorOverride("font_color", new Color("#cbd5e1"));
         hintLabel.AddThemeFontSizeOverride("font_size", 11);
         _neighborsContainer.AddChild(hintLabel);
+    }
+
+    private void UpdateArmyList(int provinceId)
+    {
+        foreach (var child in _armyListContainer.GetChildren())
+        {
+            child.QueueFree();
+        }
+
+        var armies = _session?.GetArmiesAtProvince(provinceId);
+        if (armies is null)
+        {
+            return;
+        }
+
+        foreach (var army in armies)
+        {
+            if (!army["isPlayerArmy"].AsBool())
+            {
+                continue;
+            }
+
+            var armyId = army["armyId"].AsInt32();
+            var soldiers = army["soldiers"].AsInt32();
+            var button = CreateStyledButton(
+                $"⚔ Quân #{armyId} · {soldiers.ToString("N0", CultureInfo.InvariantCulture)} binh sĩ",
+                () =>
+                {
+                    _selectedArmyId = armyId;
+                    UpdateArmyStatus();
+                },
+                isActive: armyId == _selectedArmyId);
+            _armyListContainer.AddChild(button);
+        }
+    }
+
+    private void UpdateArmyStatus()
+    {
+        if (_selectedArmyId <= 0 || _session is null)
+        {
+            _armyStatusLabel.Text = "Chọn quân trên bản đồ hoặc trong danh sách để ra lệnh.";
+            return;
+        }
+
+        var army = _session.GetArmyDetails(_selectedArmyId);
+        if (army.Count == 0)
+        {
+            _selectedArmyId = -1;
+            _armyStatusLabel.Text = "Đội quân đã không còn tồn tại.";
+            return;
+        }
+
+        var currentProvince = army["currentProvinceName"].AsString();
+        var targetProvince = army["targetProvinceName"].AsString();
+        var soldiers = army["soldiers"].AsInt32();
+        _armyStatusLabel.Text = string.IsNullOrEmpty(targetProvince)
+            ? $"Đang chọn Quân #{_selectedArmyId}: {soldiers.ToString("N0", CultureInfo.InvariantCulture)} binh sĩ tại {currentProvince}."
+            : $"Quân #{_selectedArmyId} đang hành quân từ {currentProvince} tới {targetProvince}.";
     }
 
     private void UpdateHoverTooltip(int provinceId)
@@ -340,13 +423,14 @@ public partial class GameHud : Control
     {
         int provinceCount = summary.ContainsKey("provinceCount") ? summary["provinceCount"].AsInt32() : 0;
         int countryCount = summary.ContainsKey("countryCount") ? summary["countryCount"].AsInt32() : 0;
+        int armyCount = summary.ContainsKey("armyCount") ? summary["armyCount"].AsInt32() : 0;
         string date = summary.ContainsKey("date") ? summary["date"].AsString() : string.Empty;
         double treasury = summary.ContainsKey("playerTreasury") ? summary["playerTreasury"].AsDouble() : 0d;
         double income = summary.ContainsKey("playerIncome") ? summary["playerIncome"].AsDouble() : 0d;
         int speed = summary.ContainsKey("speed") ? summary["speed"].AsInt32() : 0;
 
         _dateLabel.Text = string.IsNullOrEmpty(date) ? "Ngày chưa xác định" : $"Ngày {date}";
-        _worldStatsLabel.Text = $"🗺️ {provinceCount} Tỉnh Thành   │   👑 {countryCount} Vương Triều   │   💰 {treasury.ToString("N0", CultureInfo.InvariantCulture)} (+{income.ToString("N0", CultureInfo.InvariantCulture)}/ngày)";
+        _worldStatsLabel.Text = $"🗺️ {provinceCount} Tỉnh   │   👑 {countryCount} Vương Triều   │   ⚔️ {armyCount} Quân   │   💰 {treasury.ToString("N0", CultureInfo.InvariantCulture)} (+{income.ToString("N0", CultureInfo.InvariantCulture)}/ngày)";
         UpdateSpeedButtons(speed);
     }
 
@@ -463,7 +547,8 @@ public partial class GameHud : Control
         _provincePanel.OffsetLeft = 16;
         _provincePanel.OffsetTop = 76;
         _provincePanel.OffsetRight = 396;
-        _provincePanel.OffsetBottom = 650;
+        _provincePanel.OffsetBottom = 760;
+        _provincePanel.CustomMinimumSize = new Vector2(380, 680);
 
         var panelStyle = CreateStyleBox(
             bgColor: new Color(0.06f, 0.09f, 0.14f, 0.96f),
@@ -584,15 +669,57 @@ public partial class GameHud : Control
 
         var recruitBtn = CreateStyledButton("⚔️ Chiêu Mộ Binh Sĩ", () =>
         {
-            GD.Print("Chiêu mộ binh sĩ: Tính năng thuộc Phase 3 (Quân Đội).");
+            if (_session is null || _selectedProvinceId <= 0)
+            {
+                return;
+            }
+
+            var result = _session.RecruitArmy(_selectedProvinceId, 1_000);
+            _armyStatusLabel.Text = result["message"].AsString();
+            if (result["success"].AsBool())
+            {
+                _selectedArmyId = result["armyId"].AsInt32();
+                UpdateArmyStatus();
+                UpdateArmyList(_selectedProvinceId);
+            }
         });
         _actionsContainer.AddChild(recruitBtn);
 
         var buildBtn = CreateStyledButton("🏰 Xây Dựng Công Trình", () =>
         {
-            GD.Print("Kiến thiết lãnh thổ: Tính năng thuộc Phase 2 (Kinh Tế).");
+            GD.Print("Xây dựng công trình chưa có trong mốc hiện tại.");
         });
         _actionsContainer.AddChild(buildBtn);
+
+        _armyStatusLabel = new Label
+        {
+            Text = "Chọn quân trên bản đồ hoặc trong danh sách để ra lệnh.",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        _armyStatusLabel.AddThemeColorOverride("font_color", new Color("#cbd5e1"));
+        _armyStatusLabel.AddThemeFontSizeOverride("font_size", 12);
+        _actionsContainer.AddChild(_armyStatusLabel);
+
+        var moveArmyBtn = CreateStyledButton("🧭 Điều quân tới tỉnh đang chọn", () =>
+        {
+            if (_session is null || _selectedArmyId <= 0 || _selectedProvinceId <= 0)
+            {
+                _armyStatusLabel.Text = "Hãy chọn một đội quân và tỉnh đích trên bản đồ.";
+                return;
+            }
+
+            var result = _session.MoveArmy(_selectedArmyId, _selectedProvinceId);
+            _armyStatusLabel.Text = result["message"].AsString();
+            if (result["success"].AsBool())
+            {
+                UpdateArmyStatus();
+            }
+        });
+        _actionsContainer.AddChild(moveArmyBtn);
+
+        _armyListContainer = new VBoxContainer();
+        _armyListContainer.AddThemeConstantOverride("separation", 4);
+        _actionsContainer.AddChild(_armyListContainer);
 
         vBox.AddChild(_actionsContainer);
 

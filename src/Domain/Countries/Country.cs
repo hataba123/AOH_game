@@ -56,4 +56,16 @@ public sealed class Country
         Expenses = expenses;
         Treasury += income - expenses;
     }
+
+    internal bool TryRecruitSoldiers(int soldiers, double cost)
+    {
+        if (soldiers <= 0 || cost < 0d || Manpower < soldiers || Treasury < cost)
+        {
+            return false;
+        }
+
+        Manpower -= soldiers;
+        Treasury -= cost;
+        return true;
+    }
 }

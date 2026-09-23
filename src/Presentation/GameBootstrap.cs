@@ -1,4 +1,5 @@
 using AOH.Game.Domain;
+using AOH.Game.Domain.Armies;
 using AOH.Game.Domain.Countries;
 using AOH.Game.Domain.Provinces;
 using AOH.Game.Infrastructure.Persistence;
@@ -7,6 +8,7 @@ using AOH.Game.Core;
 using AOH.Game.Simulation;
 using AOH.Game.Simulation.Economy;
 using AOH.Game.Simulation.Population;
+using AOH.Game.Simulation.Military;
 using Godot;
 
 namespace AOH.Game.Presentation;
@@ -19,6 +21,8 @@ public partial class GameBootstrap : Node2D
     private ProvinceMap? _provinceMap;
     private Node? _hud;
     private SimulationEngine? _simulationEngine;
+    private ProvincePathfinder? _pathfinder;
+    private readonly ArmyRecruitmentService _armyRecruitmentService = new();
 
     [Signal]
     public delegate void WorldReadyEventHandler(Godot.Collections.Dictionary summary);
@@ -32,21 +36,27 @@ public partial class GameBootstrap : Node2D
     [Signal]
     public delegate void WorldTickedEventHandler(Godot.Collections.Dictionary summary);
 
+    [Signal]
+    public delegate void ArmySelectedEventHandler(int armyId);
+
     public override void _Ready()
     {
         try
         {
             var data = new JsonGameDataRepository().Load();
             _world = data.World;
+            _pathfinder = new ProvincePathfinder(_world);
             _simulationEngine = new SimulationEngine(
                 _world,
                 new GameTime(data.StartDate, data.StartingSpeed),
                 new EconomySystem(),
-                new PopulationSystem());
+                new PopulationSystem(),
+                new ArmyMovementSystem());
             _provinceMap = new ProvinceMap();
             _provinceMap.Configure(data.World, data.ColorLookup, data.MapData);
             _provinceMap.ProvinceSelectionChanged += HandleProvinceSelected;
             _provinceMap.ProvinceHoverChanged += HandleProvinceHovered;
+            _provinceMap.ArmySelectionChanged += HandleArmySelected;
             AddChild(_provinceMap);
 
             LoadHud();
@@ -63,6 +73,7 @@ public partial class GameBootstrap : Node2D
     {
         if (_simulationEngine?.AdvanceFrame(delta) > 0)
         {
+            _provinceMap?.QueueRedraw();
             EmitSignal(SignalName.WorldTicked, CreateWorldSummary());
         }
     }
@@ -76,6 +87,113 @@ public partial class GameBootstrap : Node2D
 
         _simulationEngine.Time.SetSpeed((GameSpeed)speed);
         EmitSignal(SignalName.WorldTicked, CreateWorldSummary());
+    }
+
+    public Godot.Collections.Dictionary RecruitArmy(int provinceId, int soldiers)
+    {
+        if (_world is null)
+        {
+            return CreateCommandResult(false, "Thế giới chưa được tải.");
+        }
+
+        var playerCountry = _world.Countries.Values.FirstOrDefault(country => !country.IsAiControlled);
+        if (playerCountry is null)
+        {
+            return CreateCommandResult(false, "Không tìm thấy quốc gia người chơi.");
+        }
+
+        var result = _armyRecruitmentService.Recruit(_world, new ProvinceId(provinceId), playerCountry.Id, soldiers);
+        if (!result.Success || result.Army is null)
+        {
+            return CreateCommandResult(false, result.Message);
+        }
+
+        _provinceMap?.SelectArmy(result.Army.Id);
+        _provinceMap?.QueueRedraw();
+        var commandResult = CreateCommandResult(true, result.Message);
+        commandResult["armyId"] = result.Army.Id.Value;
+        EmitSignal(SignalName.WorldTicked, CreateWorldSummary());
+        return commandResult;
+    }
+
+    public Godot.Collections.Dictionary MoveArmy(int armyId, int targetProvinceId)
+    {
+        if (_world is null || _pathfinder is null || !_world.Armies.TryGetValue(new ArmyId(armyId), out var army))
+        {
+            return CreateCommandResult(false, "Không tìm thấy đội quân.");
+        }
+
+        if (_world.Countries[army.OwnerCountryId].IsAiControlled)
+        {
+            return CreateCommandResult(false, "Bạn chỉ có thể điều khiển quân đội của quốc gia người chơi.");
+        }
+
+        var target = new ProvinceId(targetProvinceId);
+        var path = _pathfinder.FindPath(army.CurrentProvinceId, target, army.OwnerCountryId);
+        if (path.Count == 0)
+        {
+            return CreateCommandResult(false, "Không tìm thấy đường đi trong lãnh thổ đang kiểm soát.");
+        }
+
+        if (path.Count == 1)
+        {
+            return CreateCommandResult(false, "Quân đội đã ở tỉnh được chọn.");
+        }
+
+        army.OrderMovement(target, path.Skip(1).ToArray());
+        _provinceMap?.QueueRedraw();
+        EmitSignal(SignalName.WorldTicked, CreateWorldSummary());
+        return CreateCommandResult(true, $"Đã phát lệnh di chuyển qua {path.Count - 1} tỉnh.");
+    }
+
+    public Godot.Collections.Dictionary GetArmyDetails(int armyId)
+    {
+        if (_world is null || !_world.Armies.TryGetValue(new ArmyId(armyId), out var army) ||
+            !_world.TryGetProvince(army.CurrentProvinceId, out var currentProvince))
+        {
+            return new Godot.Collections.Dictionary();
+        }
+
+        var owner = _world.Countries[army.OwnerCountryId];
+        var targetName = army.TargetProvinceId is { } targetId && _world.TryGetProvince(targetId, out var targetProvince)
+            ? targetProvince.Name
+            : string.Empty;
+        return new Godot.Collections.Dictionary
+        {
+            ["armyId"] = army.Id.Value,
+            ["ownerCountryId"] = army.OwnerCountryId.Value,
+            ["ownerCountryName"] = owner.Name,
+            ["isPlayerArmy"] = !owner.IsAiControlled,
+            ["currentProvinceId"] = army.CurrentProvinceId.Value,
+            ["currentProvinceName"] = currentProvince.Name,
+            ["targetProvinceName"] = targetName,
+            ["soldiers"] = army.Soldiers,
+            ["pathLength"] = army.Path.Count,
+            ["movementProgress"] = army.MovementProgress
+        };
+    }
+
+    public Godot.Collections.Array<Godot.Collections.Dictionary> GetArmiesAtProvince(int provinceId)
+    {
+        var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
+        if (_world is null)
+        {
+            return result;
+        }
+
+        foreach (var army in _world.Armies.Values.Where(army => army.CurrentProvinceId.Value == provinceId))
+        {
+            var owner = _world.Countries[army.OwnerCountryId];
+            result.Add(new Godot.Collections.Dictionary
+            {
+                ["armyId"] = army.Id.Value,
+                ["ownerCountryName"] = owner.Name,
+                ["isPlayerArmy"] = !owner.IsAiControlled,
+                ["soldiers"] = army.Soldiers
+            });
+        }
+
+        return result;
     }
 
     public Godot.Collections.Dictionary GetProvinceDetails(int provinceId)
@@ -207,6 +325,11 @@ public partial class GameBootstrap : Node2D
         {
             Connect(SignalName.WorldTicked, new Callable(_hud, "OnWorldTicked"));
         }
+
+        if (_hud.HasMethod("OnArmySelected"))
+        {
+            Connect(SignalName.ArmySelected, new Callable(_hud, "OnArmySelected"));
+        }
     }
 
     private Godot.Collections.Dictionary CreateWorldSummary()
@@ -215,6 +338,7 @@ public partial class GameBootstrap : Node2D
         {
             ["provinceCount"] = _world?.Provinces.Count ?? 0,
             ["countryCount"] = _world?.Countries.Count ?? 0,
+            ["armyCount"] = _world?.Armies.Count ?? 0,
             ["date"] = _simulationEngine?.Time.CurrentDate.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
             ["speed"] = _simulationEngine is null ? 0 : (int)_simulationEngine.Time.Speed,
             ["tickCount"] = _simulationEngine?.Time.TickCount ?? 0,
@@ -231,5 +355,19 @@ public partial class GameBootstrap : Node2D
     private void HandleProvinceHovered(ProvinceId? provinceId)
     {
         EmitSignal(SignalName.ProvinceHovered, provinceId?.Value ?? -1);
+    }
+
+    private void HandleArmySelected(ArmyId? armyId)
+    {
+        EmitSignal(SignalName.ArmySelected, armyId?.Value ?? -1);
+    }
+
+    private static Godot.Collections.Dictionary CreateCommandResult(bool success, string message)
+    {
+        return new Godot.Collections.Dictionary
+        {
+            ["success"] = success,
+            ["message"] = message
+        };
     }
 }

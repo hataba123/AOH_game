@@ -73,4 +73,15 @@ public sealed class Province
         Manpower += manpowerGrowth;
         return manpowerGrowth;
     }
+
+    internal bool TryRecruitSoldiers(int soldiers)
+    {
+        if (soldiers <= 0 || Manpower < soldiers)
+        {
+            return false;
+        }
+
+        Manpower -= soldiers;
+        return true;
+    }
 }
