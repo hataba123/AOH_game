@@ -24,6 +24,7 @@ public partial class GameLauncher : Control
         LoadDisplaySettings();
         BuildMenu();
         UpdateContinueButton();
+        CenterWindowOnCurrentScreen();
     }
 
     private void BuildMenu()
@@ -36,13 +37,15 @@ public partial class GameLauncher : Control
         background.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(background);
 
+        var menuCenter = new CenterContainer
+        {
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        menuCenter.SetAnchorsPreset(LayoutPreset.FullRect);
+        AddChild(menuCenter);
+
         _menuPanel = CreatePanel(new Vector2(460, 520));
-        _menuPanel.SetAnchorsPreset(LayoutPreset.Center);
-        _menuPanel.OffsetLeft = -230;
-        _menuPanel.OffsetTop = -260;
-        _menuPanel.OffsetRight = 230;
-        _menuPanel.OffsetBottom = 260;
-        AddChild(_menuPanel);
+        menuCenter.AddChild(_menuPanel);
 
         var menuContent = new VBoxContainer();
         menuContent.AddThemeConstantOverride("separation", 14);
@@ -88,14 +91,16 @@ public partial class GameLauncher : Control
 
     private void BuildSettingsPanel()
     {
+        var settingsCenter = new CenterContainer
+        {
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        settingsCenter.SetAnchorsPreset(LayoutPreset.FullRect);
+        AddChild(settingsCenter);
+
         _settingsPanel = CreatePanel(new Vector2(560, 410));
-        _settingsPanel.SetAnchorsPreset(LayoutPreset.Center);
-        _settingsPanel.OffsetLeft = -280;
-        _settingsPanel.OffsetTop = -205;
-        _settingsPanel.OffsetRight = 280;
-        _settingsPanel.OffsetBottom = 205;
         _settingsPanel.Visible = false;
-        AddChild(_settingsPanel);
+        settingsCenter.AddChild(_settingsPanel);
 
         var content = new VBoxContainer();
         content.AddThemeConstantOverride("separation", 16);
@@ -187,6 +192,7 @@ public partial class GameLauncher : Control
     {
         DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed);
         DisplayServer.WindowSetSize(new Vector2I(width, height));
+        CenterWindowOnCurrentScreen();
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
@@ -221,6 +227,15 @@ public partial class GameLauncher : Control
         {
             GD.PushWarning($"Không thể đọc cài đặt hiển thị: {exception.Message}");
         }
+    }
+
+    private static void CenterWindowOnCurrentScreen()
+    {
+        var screen = DisplayServer.WindowGetCurrentScreen();
+        var usableArea = DisplayServer.ScreenGetUsableRect(screen);
+        var windowSize = DisplayServer.WindowGetSize();
+        var centeredPosition = usableArea.Position + ((usableArea.Size - windowSize) / 2);
+        DisplayServer.WindowSetPosition(centeredPosition);
     }
 
     private void ShowStatus(string message, bool isError)
