@@ -54,4 +54,12 @@ HUD sẽ được nạp tự động từ `Scenes/UI/GameHud.tscn`. Xem [hợp �
 4. Phase 4 — Chiến tranh, giao tranh, chiếm đóng và hòa ước (đã triển khai).
 5. Phase 5 — AI kinh tế và quân sự (đã triển khai).
 6. Phase 6 — Save/load và menu (đã triển khai).
-7. Phase 7 — Đo hiệu năng và kiểm tra thế giới lớn.
+7. Phase 7 — Đo hiệu năng và kiểm tra thế giới lớn (đã triển khai).
+
+Chạy benchmark headless với bản đồ lưới giả lập 5.000 tỉnh, 200 quốc gia và ít nhất 5.000 quân:
+
+```powershell
+& "<đường-dẫn-Godot-.NET>\Godot_v4.7.2-stable_mono_win64_console.exe" --headless --path . res://tests/WorldScaleBenchmark.tscn
+```
+
+Benchmark in thời gian dựng thế giới, mô phỏng 8 ngày, trung bình mỗi tick và tìm đường A*. Trong game, nhấn **F3** để bật/tắt bảng FPS, số tỉnh/quân, tick AI và thời gian mô phỏng.

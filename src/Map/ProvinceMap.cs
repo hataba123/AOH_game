@@ -21,6 +21,9 @@ public partial class ProvinceMap : Node2D
     private static readonly Color HoverColor = new("#8FE0D0");
 
     private readonly Camera2D _camera;
+    private readonly Dictionary<ProvinceId, Vector2[]> _provincePolygons = [];
+    private readonly Dictionary<ProvinceId, Vector2[]> _provinceBorders = [];
+    private (Vector2 Start, Vector2 End)[] _coastlineSegments = [];
     private GameWorld? _world;
     private ProvinceColorLookup? _colorLookup;
     private ProvinceMapData? _mapData;
@@ -61,6 +64,15 @@ public partial class ProvinceMap : Node2D
         _world = world;
         _colorLookup = colorLookup;
         _mapData = mapData;
+        _provincePolygons.Clear();
+        _provinceBorders.Clear();
+        foreach (var province in world.Provinces.Values)
+        {
+            _provincePolygons.Add(province.Id, ToVector2Array(province.Polygon));
+            _provinceBorders.Add(province.Id, ClosedPolygon(province.Polygon));
+        }
+
+        _coastlineSegments = BuildCoastline(world);
         QueueRedraw();
     }
 
@@ -89,8 +101,7 @@ public partial class ProvinceMap : Node2D
         {
             var country = _world.Countries[province.OwnerCountryId];
             var color = Color.FromHtml(country.MapColor);
-            var polygon = ToVector2Array(province.Polygon);
-            DrawColoredPolygon(polygon, color);
+            DrawColoredPolygon(_provincePolygons[province.Id], color);
         }
 
         DrawProvinceBorders();
@@ -286,43 +297,16 @@ public partial class ProvinceMap : Node2D
 
         foreach (var province in _world.Provinces.Values)
         {
-            DrawPolyline(ClosedPolygon(province.Polygon), ProvinceBorder, 2f, true);
+            DrawPolyline(_provinceBorders[province.Id], ProvinceBorder, 2f, true);
         }
     }
 
     private void DrawCoastline()
     {
-        if (_world is null)
+        foreach (var segment in _coastlineSegments)
         {
-            return;
-        }
-
-        var edgeCounts = new Dictionary<MapEdgeKey, (MapPoint Start, MapPoint End, int Count)>();
-        foreach (var province in _world.Provinces.Values)
-        {
-            for (var index = 0; index < province.Polygon.Count; index++)
-            {
-                var start = province.Polygon[index];
-                var end = province.Polygon[(index + 1) % province.Polygon.Count];
-                var key = MapEdgeKey.Create(start, end);
-                if (edgeCounts.TryGetValue(key, out var edge))
-                {
-                    edgeCounts[key] = (edge.Start, edge.End, edge.Count + 1);
-                }
-                else
-                {
-                    edgeCounts.Add(key, (start, end, 1));
-                }
-            }
-        }
-
-        foreach (var edge in edgeCounts.Values)
-        {
-            if (edge.Count == 1)
-            {
-                DrawLine(ToVector(edge.Start), ToVector(edge.End), new Color(0.08f, 0.13f, 0.14f, 0.55f), 7f, true);
-                DrawLine(ToVector(edge.Start), ToVector(edge.End), CoastlineColor, 3f, true);
-            }
+            DrawLine(segment.Start, segment.End, new Color(0.08f, 0.13f, 0.14f, 0.55f), 7f, true);
+            DrawLine(segment.Start, segment.End, CoastlineColor, 3f, true);
         }
     }
 
@@ -334,8 +318,15 @@ public partial class ProvinceMap : Node2D
         }
 
         var font = ThemeDB.FallbackFont;
+        var labelLimit = _camera.Zoom.X < 0.6f ? 150 : _camera.Zoom.X < 0.9f ? 300 : 600;
+        var labelStride = Math.Max(1, (int)Math.Ceiling(_world.Provinces.Count / (double)labelLimit));
         foreach (var province in _world.Provinces.Values)
         {
+            if (province.Id != _selectedProvinceId && province.Id != _hoveredProvinceId && province.Id.Value % labelStride != 0)
+            {
+                continue;
+            }
+
             var position = new Vector2(province.CapitalPosition.X, province.CapitalPosition.Y);
             DrawCircle(position, 8f, new Color(0.08f, 0.13f, 0.14f, 0.8f));
             DrawCircle(position, 5f, new Color("#F3E7CA"));
@@ -352,7 +343,7 @@ public partial class ProvinceMap : Node2D
         }
 
         var stackCounts = new Dictionary<ProvinceId, int>();
-        foreach (var army in _world.Armies.Values.OrderBy(army => army.Id.Value))
+        foreach (var army in _world.Armies.Values)
         {
             if (!_world.TryGetProvince(army.CurrentProvinceId, out var province))
             {
@@ -387,7 +378,7 @@ public partial class ProvinceMap : Node2D
         ArmyId? nearestArmyId = null;
         var nearestDistanceSquared = 20f * 20f;
         var stackCounts = new Dictionary<ProvinceId, int>();
-        foreach (var army in _world.Armies.Values.OrderBy(army => army.Id.Value))
+        foreach (var army in _world.Armies.Values)
         {
             if (!_world.TryGetProvince(army.CurrentProvinceId, out var province))
             {
@@ -427,8 +418,35 @@ public partial class ProvinceMap : Node2D
 
         var fill = color;
         fill.A = alpha;
-        DrawColoredPolygon(ToVector2Array(province.Polygon), fill);
-        DrawPolyline(ClosedPolygon(province.Polygon), color, width, true);
+        DrawColoredPolygon(_provincePolygons[province.Id], fill);
+        DrawPolyline(_provinceBorders[province.Id], color, width, true);
+    }
+
+    private static (Vector2 Start, Vector2 End)[] BuildCoastline(GameWorld world)
+    {
+        var edgeCounts = new Dictionary<MapEdgeKey, (MapPoint Start, MapPoint End, int Count)>();
+        foreach (var province in world.Provinces.Values)
+        {
+            for (var index = 0; index < province.Polygon.Count; index++)
+            {
+                var start = province.Polygon[index];
+                var end = province.Polygon[(index + 1) % province.Polygon.Count];
+                var key = MapEdgeKey.Create(start, end);
+                if (edgeCounts.TryGetValue(key, out var edge))
+                {
+                    edgeCounts[key] = (edge.Start, edge.End, edge.Count + 1);
+                }
+                else
+                {
+                    edgeCounts.Add(key, (start, end, 1));
+                }
+            }
+        }
+
+        return edgeCounts.Values
+            .Where(edge => edge.Count == 1)
+            .Select(edge => (ToVector(edge.Start), ToVector(edge.End)))
+            .ToArray();
     }
 
     private static Vector2[] ToVector2Array(IReadOnlyList<MapPoint> polygon)

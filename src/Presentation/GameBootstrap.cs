@@ -352,6 +352,17 @@ public partial class GameBootstrap : Node2D
             return result;
         }
 
+        var provinceCounts = new Dictionary<CountryId, int>(_world.Countries.Count);
+        foreach (var country in _world.Countries.Values)
+        {
+            provinceCounts.Add(country.Id, 0);
+        }
+
+        foreach (var province in _world.Provinces.Values)
+        {
+            provinceCounts[province.OwnerCountryId]++;
+        }
+
         var playerCountry = _world.Countries.Values.FirstOrDefault(candidate => !candidate.IsAiControlled);
         foreach (var country in _world.Countries.Values.OrderBy(country => country.Id.Value))
         {
@@ -364,7 +375,7 @@ public partial class GameBootstrap : Node2D
                 ["name"] = country.Name,
                 ["mapColor"] = country.MapColor,
                 ["capitalProvinceId"] = country.CapitalProvinceId,
-                ["provinceCount"] = _world.Provinces.Values.Count(province => province.OwnerCountryId == country.Id),
+                ["provinceCount"] = provinceCounts[country.Id],
                 ["isAiControlled"] = country.IsAiControlled,
                 ["treasury"] = country.Treasury,
                 ["income"] = country.Income,
@@ -474,6 +485,8 @@ public partial class GameBootstrap : Node2D
             ["date"] = _simulationEngine?.Time.CurrentDate.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
             ["speed"] = _simulationEngine is null ? 0 : (int)_simulationEngine.Time.Speed,
             ["tickCount"] = _simulationEngine?.Time.TickCount ?? 0,
+            ["tickDurationMs"] = _simulationEngine?.LastTickDurationMilliseconds ?? 0d,
+            ["averageTickDurationMs"] = _simulationEngine?.AverageTickDurationMilliseconds ?? 0d,
             ["playerTreasury"] = _world?.Countries.Values.FirstOrDefault(country => !country.IsAiControlled)?.Treasury ?? 0d,
             ["playerIncome"] = _world?.Countries.Values.FirstOrDefault(country => !country.IsAiControlled)?.Income ?? 0d
         };

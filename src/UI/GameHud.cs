@@ -45,6 +45,8 @@ public partial class GameHud : Control
     private PanelContainer _toastPanel = null!;
     private Label _toastLabel = null!;
     private double _toastRemainingSeconds;
+    private PanelContainer _debugOverlay = null!;
+    private Label _debugLabel = null!;
 
     public override void _Ready()
     {
@@ -64,6 +66,11 @@ public partial class GameHud : Control
         {
             _toastRemainingSeconds -= delta;
             _toastPanel.Visible = _toastRemainingSeconds > 0d;
+        }
+
+        if (_debugOverlay.Visible && _session is not null)
+        {
+            UpdateDebugOverlay();
         }
 
         // Update floating tooltip to follow cursor smoothly
@@ -87,6 +94,15 @@ public partial class GameHud : Control
             }
 
             _hoverTooltip.Position = new Vector2(targetX, targetY);
+        }
+    }
+
+    public override void _UnhandledKeyInput(InputEvent inputEvent)
+    {
+        if (inputEvent is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo && keyEvent.Keycode == Key.F3)
+        {
+            _debugOverlay.Visible = !_debugOverlay.Visible;
+            GetViewport().SetInputAsHandled();
         }
     }
 
@@ -458,6 +474,7 @@ public partial class GameHud : Control
         BuildLedgerModal();
         BuildNavigationHint();
         BuildToast();
+        BuildDebugOverlay();
     }
 
     private void UpdateWorldSummary(Godot.Collections.Dictionary summary)
@@ -1010,6 +1027,47 @@ public partial class GameHud : Control
         _toastLabel.Text = message;
         _toastPanel.Visible = true;
         _toastRemainingSeconds = 3d;
+    }
+
+    private void BuildDebugOverlay()
+    {
+        _debugOverlay = new PanelContainer
+        {
+            CustomMinimumSize = new Vector2(300, 132),
+            Visible = false,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        _debugOverlay.SetAnchorsPreset(LayoutPreset.TopRight);
+        _debugOverlay.OffsetLeft = -318;
+        _debugOverlay.OffsetTop = 74;
+        _debugOverlay.OffsetRight = -14;
+        _debugOverlay.OffsetBottom = 210;
+        _debugOverlay.AddThemeStyleboxOverride("panel", CreateStyleBox(
+            new Color(0.04f, 0.07f, 0.12f, 0.94f),
+            new Color("#475569"),
+            borderWidth: 1,
+            radius: 8,
+            padH: 14,
+            padV: 10));
+        _debugLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        _debugLabel.AddThemeColorOverride("font_color", new Color("#cbd5e1"));
+        _debugLabel.AddThemeFontSizeOverride("font_size", 12);
+        _debugOverlay.AddChild(_debugLabel);
+        AddChild(_debugOverlay);
+    }
+
+    private void UpdateDebugOverlay()
+    {
+        var summary = _session!.GetGameSummary();
+        var framesPerSecond = Engine.GetFramesPerSecond();
+        var tickCount = summary["tickCount"].AsInt64();
+        var date = summary["date"].AsString();
+        var provinceCount = summary["provinceCount"].AsInt32();
+        var armyCount = summary["armyCount"].AsInt32();
+        var aiCountryCount = summary["aiCountryCount"].AsInt32();
+        var tickDuration = summary["tickDurationMs"].AsDouble();
+        var averageTickDuration = summary["averageTickDurationMs"].AsDouble();
+        _debugLabel.Text = $"F3 · DEBUG\nFPS: {framesPerSecond}   Tick: {tickCount} ({date})\nTỉnh: {provinceCount}   Quân: {armyCount}\nQuốc gia AI: {aiCountryCount}\nTick gần nhất: {tickDuration:F3} ms   TB: {averageTickDuration:F3} ms";
     }
 
     // --- Helper Styling Methods ---

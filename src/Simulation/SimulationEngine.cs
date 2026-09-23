@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AOH.Game.Core;
 using AOH.Game.Domain;
 
@@ -14,6 +15,8 @@ public sealed class SimulationEngine
     private readonly GameWorld _world;
     private readonly IGameSystem[] _systems;
     private double _accumulatedSeconds;
+    private long _measuredTickCount;
+    private double _totalTickDurationMilliseconds;
 
     public SimulationEngine(GameWorld world, GameTime gameTime, params IGameSystem[] systems)
     {
@@ -23,6 +26,12 @@ public sealed class SimulationEngine
     }
 
     public GameTime Time { get; }
+
+    public double LastTickDurationMilliseconds { get; private set; }
+
+    public double AverageTickDurationMilliseconds => _measuredTickCount == 0
+        ? 0d
+        : _totalTickDurationMilliseconds / _measuredTickCount;
 
     public void ResetElapsedTime() => _accumulatedSeconds = 0d;
 
@@ -55,11 +64,15 @@ public sealed class SimulationEngine
 
     public void AdvanceTick()
     {
+        var startedAt = Stopwatch.GetTimestamp();
         foreach (var system in _systems)
         {
             system.Process(_world);
         }
 
         Time.AdvanceOneDay();
+        LastTickDurationMilliseconds = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+        _totalTickDurationMilliseconds += LastTickDurationMilliseconds;
+        _measuredTickCount++;
     }
 }
